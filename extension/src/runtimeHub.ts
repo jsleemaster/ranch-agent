@@ -1,3 +1,4 @@
+import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -16,6 +17,15 @@ interface WatchedSource {
   remainder: string;
   nextRetryAt: number;
   didReportError: boolean;
+}
+
+function initialOffset(filePath: string): number {
+  try {
+    const stat = fsSync.statSync(filePath);
+    return stat.size;
+  } catch {
+    return 0;
+  }
 }
 
 async function readSlice(filePath: string, offset: number, size: number): Promise<string> {
@@ -116,7 +126,8 @@ export class ClaudeJsonlRuntimeHub {
       if (!this.sources.has(filePath)) {
         this.sources.set(filePath, {
           filePath,
-          offset: 0,
+          // Start at EOF so historical transcripts do not flood the dashboard.
+          offset: initialOffset(filePath),
           remainder: "",
           nextRetryAt: 0,
           didReportError: false

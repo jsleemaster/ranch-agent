@@ -16,6 +16,12 @@ export interface RawRuntimeEvent {
   toolName?: string;
   toolId?: string;
   filePath?: string;
+  workingDir?: string;
+  branchName?: string | null;
+  isMainBranch?: boolean;
+  mainBranchRisk?: boolean;
+  invokedAgentHint?: string | null;
+  invokedAgentMdId?: string | null;
   detail?: string;
   isError?: boolean;
 }

@@ -21,6 +21,8 @@ interface SkillFlowPanelProps {
   onSelectSkill: (skill: SkillKind | null) => void;
 }
 
+const MAX_VISIBLE_ROWS = 28;
+
 interface NodeProps {
   x: number;
   y: number;
@@ -99,7 +101,10 @@ export default function SkillFlowPanel({
   onSelectAgent,
   onSelectSkill
 }: SkillFlowPanelProps): JSX.Element {
-  const rows = agents;
+  const rows = useMemo(() => {
+    return [...agents].sort((a, b) => b.lastEventTs - a.lastEventTs).slice(0, MAX_VISIBLE_ROWS);
+  }, [agents]);
+  const hiddenCount = Math.max(0, agents.length - rows.length);
   const rowHeight = 52;
   const baseHeight = 26;
   const width = 340;
@@ -110,8 +115,14 @@ export default function SkillFlowPanel({
   }, [skillMetrics]);
 
   return (
-    <div className="panel-body">
-      <svg className="skill-flow" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+    <div className="panel-body skill-flow-panel">
+      <div className="skill-flow-wrap">
+        <svg
+          className="skill-flow"
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          style={{ height: `${height}px` }}
+        >
         {rows.map((agent, index) => {
           const y = baseHeight + index * rowHeight;
           const skill = agent.currentSkill;
@@ -172,8 +183,9 @@ export default function SkillFlowPanel({
             </g>
           );
         })}
-      </svg>
-      {rows.length === 0 ? <div className="empty-hint" title="작업 동선은 이벤트가 오면 시작됩니다">...</div> : null}
+        </svg>
+      </div>
+      {hiddenCount > 0 ? <div className="flow-note">최근 {rows.length}명 표시 · 나머지 {hiddenCount}명 숨김</div> : null}
     </div>
   );
 }

@@ -6,13 +6,10 @@ Emoji-first VS Code extension for visualizing multi-agent runtime activity as a 
 
 ## What You Get
 
-- 4-panel live visualization:
-  - `일꾼 우리` (agent board)
-  - `작업 동선` (agent -> skill -> gate flow)
-  - `목장 구역` (folder zone map)
-  - `작업 일지` (live event feed)
+- 4-panel live visualization dashboard
 - Claude JSONL 실시간 감시 (자동 탐색 + 수동 경로 설정)
 - Multi-JSONL 입력 지원 (동시 세션 관찰)
+- Workspace `.claude/agents/*.md` 목록 자동 감지 + 호출 횟수(에이전트별) 표시
 - 이벤트 기반 상태 파생:
   - skill 정규화
   - hook gate 상태(open/blocked/failed/closed)
@@ -24,6 +21,17 @@ Emoji-first VS Code extension for visualizing multi-agent runtime activity as a 
 
 - 기본 컨셉: `Ranch-Agent`
 - 기존 설정 키/내부 ID(`expeditionSituationRoom.*`)는 호환성 때문에 유지합니다.
+
+## Panel Guide (중복 없는 정의)
+
+1. `일꾼 우리`:
+   에이전트 상태(활동/대기), 현재 스킬/게이트, 성장단계, 브랜치 위험, Agent-MD 호출 누적을 본다.
+2. `작업 동선`:
+   `agent -> skill -> gate` 흐름을 한 줄로 표시해 어떤 에이전트가 어떤 작업 경로에 있는지 본다.
+3. `목장 구역`:
+   파일 경로 기반 zone(`src/apps/packages/...`)에 에이전트가 어디에 몰려있는지 본다.
+4. `작업 일지`:
+   최신 이벤트 타임라인(최대 200)을 통해 언제 무엇이 발생했는지 추적한다.
 
 ## Project Structure
 
@@ -86,6 +94,25 @@ npx @vscode/vsce package
 - VS Code -> Extensions -> `...` -> `Install from VSIX...`
 - 생성된 `.vsix` 선택 후 Reload
 
+## Local Testing Loop (Main VS Code 자동 갱신)
+
+메인 VS Code에 설치한 로컬 확장을 계속 최신으로 유지하려면 아래 명령 1개만 실행:
+
+```bash
+npm run dev:main-vscode
+```
+
+포함 동작:
+- `webview-ui` 빌드 watch
+- `extension` 빌드 watch
+- 설치 폴더 자동 동기화 (`~/.vscode/extensions/local.ranch-agent-extension-0.1.0`)
+
+동기화만 단독으로 돌리고 싶으면:
+
+```bash
+npm run sync:installed
+```
+
 ## Runtime Input (Claude JSONL)
 
 ### Auto mode
@@ -108,14 +135,26 @@ npx @vscode/vsce package
 }
 ```
 
-## How to Use with Claude
+## Main Branch Detect (오픈소스 안전장치)
 
-1. Ranch-Agent를 실행 중인 같은 workspace에서 Claude/Codex 에이전트 작업 시작
-2. JSONL 이벤트가 생성되면 패널이 실시간 갱신
-3. 패널 클릭으로 필터 동기화:
-   - agent 선택
-   - skill 선택
-   - zone 선택
+기본값으로 보호 브랜치(`main/master/trunk`) 감지를 켜두었습니다.
+
+```json
+{
+  "expeditionSituationRoom.mainBranchDetect.enabled": true,
+  "expeditionSituationRoom.mainBranchDetect.mainBranchNames": ["main", "master", "trunk"],
+  "expeditionSituationRoom.mainBranchDetect.excludeAgentIdPattern": "^(my-agent-id|coordinator)$"
+}
+```
+
+- `excludeAgentIdPattern`으로 본인 에이전트는 위험 카운트에서 제외할 수 있습니다.
+- UI 상단 `메인⚠` 카운터와 에이전트 카드 강조로 즉시 확인할 수 있습니다.
+
+## Workspace Agent-MD Tracking
+
+- 시작 시 workspace의 `.claude/agents/*.md`를 스캔해 상단 `에이전트MD`로 개수/목록을 표시합니다.
+- `Task` tool의 `subagent_type`가 해당 파일명과 매칭되면, 런타임 에이전트 카드의 `🤖N` 카운터가 증가합니다.
+- 상세 매핑은 에이전트 카드 툴팁에서 `agent-md-map`으로 확인할 수 있습니다.
 
 ## Usage Guide (Step-by-Step)
 
@@ -137,11 +176,7 @@ npx @vscode/vsce package
 
 1. Ranch-Agent가 켜진 동일 workspace에서 Claude/Codex 작업을 실제로 실행
 2. 툴 실행/완료 이벤트가 발생하면 화면이 `...` 상태에서 즉시 갱신
-3. 아래 4개 패널이 함께 변하는지 확인:
-   - `일꾼 우리`: 에이전트 현재 상태, 스킬, 게이트, 성장 단계
-   - `작업 동선`: agent -> skill -> gate 흐름 강조
-   - `목장 구역`: 폴더 zone 기준 위치 변화
-   - `작업 일지`: 최근 이벤트 로그(최대 200개)
+3. 4개 패널 의미는 위 `Panel Guide` 기준으로 확인
 
 ### C. 분석 모드로 보기
 

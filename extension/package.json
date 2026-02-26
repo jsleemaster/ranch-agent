@@ -46,6 +46,28 @@
           "type": "string",
           "default": "",
           "description": "Absolute path to Claude JSONL runtime transcript to watch."
+        },
+        "expeditionSituationRoom.mainBranchDetect.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Detect whether agent activity is occurring on protected main branches."
+        },
+        "expeditionSituationRoom.mainBranchDetect.mainBranchNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "main",
+            "master",
+            "trunk"
+          ],
+          "description": "Branch names treated as protected main branches."
+        },
+        "expeditionSituationRoom.mainBranchDetect.excludeAgentIdPattern": {
+          "type": "string",
+          "default": "",
+          "description": "Regex pattern for agent IDs to exclude from main-branch risk alerts (for example, your own coordinator agent)."
         }
       }
     }

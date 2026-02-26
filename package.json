@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "build": "npm --prefix webview-ui run build && npm --prefix extension run build",
-    "watch": "npm --prefix webview-ui run build:watch"
+    "watch": "npm --prefix webview-ui run build:watch",
+    "sync:installed": "bash scripts/sync-installed-local.sh",
+    "dev:main-vscode": "bash scripts/dev-main-vscode.sh"
   }
 }

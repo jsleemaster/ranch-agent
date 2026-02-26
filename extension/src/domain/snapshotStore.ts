@@ -100,6 +100,15 @@ export class SnapshotStore {
     const currentSkill: SkillKind | null = nextSkill ?? existing?.currentSkill ?? null;
     const currentHookGate = nextGate ?? existing?.currentHookGate ?? null;
     const currentState = nextState ?? existing?.state ?? "waiting";
+    const branchName = raw.branchName ?? existing?.branchName ?? null;
+    const isMainBranch = raw.isMainBranch ?? existing?.isMainBranch ?? false;
+    const mainBranchRisk = raw.mainBranchRisk ?? existing?.mainBranchRisk ?? false;
+    const prevAgentMdCallsById = existing?.agentMdCallsById ?? {};
+    const nextAgentMdCallsById = { ...prevAgentMdCallsById };
+    if (raw.invokedAgentMdId) {
+      nextAgentMdCallsById[raw.invokedAgentMdId] = (nextAgentMdCallsById[raw.invokedAgentMdId] ?? 0) + 1;
+    }
+    const agentMdCallsTotal = Object.values(nextAgentMdCallsById).reduce((sum, count) => sum + count, 0);
     const shouldGrow = GROWTH_EVENT_TYPES.has(raw.type);
     const usageCount = (existing?.usageCount ?? 0) + (shouldGrow ? 1 : 0);
     const growthStage = growthStageForUsage(usageCount);
@@ -113,6 +122,11 @@ export class SnapshotStore {
       currentSkill,
       currentHookGate,
       currentZoneId: nextZoneId,
+      branchName,
+      isMainBranch,
+      mainBranchRisk,
+      agentMdCallsTotal,
+      agentMdCallsById: nextAgentMdCallsById,
       usageCount,
       growthStage,
       lastEventTs: raw.ts
@@ -160,6 +174,9 @@ export class SnapshotStore {
       skill: currentSkill,
       hookGate: currentHookGate,
       zoneId: nextZoneId,
+      branchName,
+      mainBranchRisk,
+      invokedAgentMdId: raw.invokedAgentMdId ?? null,
       growthStage: growthStage,
       text: raw.detail
     };

@@ -212,12 +212,12 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
         if (zoneIcon) {
           context.drawImage(zoneIcon, x + 6, y + 6, 18, 18);
         } else {
-          context.font = "16px sans-serif";
+          context.font = "18px sans-serif";
           context.textAlign = "left";
           context.textBaseline = "top";
           context.fillStyle = "rgba(255,255,255,0.9)";
           context.fillText(zoneEmoji(zone.zoneId), x + 6, y + 4);
-          context.font = "10px sans-serif";
+          context.font = "12px sans-serif";
           context.fillStyle = "rgba(242,246,236,0.86)";
           context.fillText(zoneLabel(zone.zoneId), x + 26, y + 8);
         }
@@ -312,7 +312,7 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
           context.beginPath();
           context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
           context.fill();
-          context.font = "12px sans-serif";
+          context.font = "14px sans-serif";
           context.textAlign = "center";
           context.textBaseline = "middle";
           context.fillStyle = "#1D2D1F";
@@ -327,7 +327,7 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
         if (gate) {
           context.drawImage(gate, x + size - 8, y - 6, 10, 10);
         } else {
-          context.font = "10px sans-serif";
+          context.font = "12px sans-serif";
           context.textAlign = "left";
           context.textBaseline = "top";
           context.fillStyle = "#f7f7f7";

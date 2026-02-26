@@ -1,7 +1,7 @@
-import type { AgentSnapshot, FeedEvent, FilterState, SkillKind, SkillMetricSnapshot, ZoneSnapshot } from "./domain";
+import type { AgentMdCatalogItem, AgentSnapshot, FeedEvent, FilterState, SkillKind, SkillMetricSnapshot, ZoneSnapshot } from "./domain";
 
 export type ExtToWebviewMessage =
-  | { type: "world_init"; zones: ZoneSnapshot[]; agents: AgentSnapshot[]; skills?: SkillMetricSnapshot[] }
+  | { type: "world_init"; zones: ZoneSnapshot[]; agents: AgentSnapshot[]; skills?: SkillMetricSnapshot[]; agentMds?: AgentMdCatalogItem[] }
   | { type: "agent_upsert"; agent: AgentSnapshot }
   | { type: "skill_metric_upsert"; metric: SkillMetricSnapshot }
   | { type: "zone_upsert"; zone: ZoneSnapshot }

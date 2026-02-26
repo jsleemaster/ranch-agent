@@ -2,11 +2,13 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import type { ExtToWebviewMessage } from "../../shared/protocol";
-import { AUTO_RUNTIME_SCAN_MS, MESSAGE_FLUSH_MS, MESSAGE_QUEUE_LIMIT, VIEW_TYPE } from "./constants";
+import { AUTO_RUNTIME_SCAN_MS, CONFIG_SECTION, MESSAGE_FLUSH_MS, MESSAGE_QUEUE_LIMIT, VIEW_TYPE } from "./constants";
 import { FolderMapper } from "./domain/folderMapper";
 import { SnapshotStore } from "./domain/snapshotStore";
 import { TeamResolver } from "./domain/teamResolver";
+import { AgentMdResolver } from "./agentMdResolver";
 import { loadAssetCatalog, toWebviewAssetCatalog } from "./assetPackLoader";
+import { type BranchDetectSettings, GitBranchResolver } from "./gitBranchResolver";
 import { parseWebviewMessage } from "./protocolGuards";
 import { resolveProjectPaths, resolveRuntimeJsonlPath } from "./projectPaths";
 import { ClaudeJsonlRuntimeHub } from "./runtimeHub";
@@ -20,6 +22,8 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private readonly teamResolver: TeamResolver;
   private readonly folderMapper: FolderMapper;
   private readonly store: SnapshotStore;
+  private readonly agentMdResolver: AgentMdResolver;
+  private readonly branchResolver: GitBranchResolver;
   private readonly runtimeHub: ClaudeJsonlRuntimeHub;
 
   private readonly disposables: vscode.Disposable[] = [];
@@ -43,10 +47,14 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
       teamResolver: this.teamResolver,
       folderMapper: this.folderMapper
     });
+    this.agentMdResolver = new AgentMdResolver(this.paths.workspaceRoot);
+    this.branchResolver = new GitBranchResolver(this.paths.workspaceRoot, this.readBranchDetectSettings());
 
     this.runtimeHub = new ClaudeJsonlRuntimeHub({
       onEvent: (event) => {
-        const update = this.store.applyRawEvent(event);
+        const branchEnriched = this.branchResolver.enrich(event);
+        const enrichedEvent = this.agentMdResolver.enrich(branchEnriched);
+        const update = this.store.applyRawEvent(enrichedEvent);
         this.enqueueMessage({ type: "agent_upsert", agent: update.agent });
         for (const metric of update.skillMetrics) {
           this.enqueueMessage({ type: "skill_metric_upsert", metric });
@@ -67,8 +75,11 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration("expeditionSituationRoom.runtimeJsonlPath")) {
+        if (event.affectsConfiguration(`${CONFIG_SECTION}.runtimeJsonlPath`)) {
           this.updateRuntimeSource();
+        }
+        if (event.affectsConfiguration(`${CONFIG_SECTION}.mainBranchDetect`)) {
+          this.branchResolver.updateSettings(this.readBranchDetectSettings());
         }
       })
     );
@@ -93,6 +104,18 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
       this.disposables.push(teamConfigWatcher);
     }
+
+    const agentMdWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(this.paths.workspaceRoot, ".claude/agents/**/*.md")
+    );
+    const reloadAgentMdCatalog = () => {
+      this.agentMdResolver.reload();
+      this.sendWorldInit();
+    };
+    agentMdWatcher.onDidChange(reloadAgentMdCatalog, this, this.disposables);
+    agentMdWatcher.onDidCreate(reloadAgentMdCatalog, this, this.disposables);
+    agentMdWatcher.onDidDelete(reloadAgentMdCatalog, this, this.disposables);
+    this.disposables.push(agentMdWatcher);
 
     this.updateRuntimeSource();
     this.runtimeScanTimer = setInterval(() => {
@@ -193,7 +216,8 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     this.runtimeHub.start(resolution.paths);
 
     if (resolution.paths.length > 0) {
-      const key = `${resolution.source}:${resolution.paths.join("|")}`;
+      const stablePaths = [...resolution.paths].sort((a, b) => a.localeCompare(b));
+      const key = `${resolution.source}:${stablePaths.join("|")}`;
       if (this.runtimeLogKey !== key) {
         const mode = resolution.source === "settings" ? "manual" : "auto";
         const label =
@@ -215,6 +239,18 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
   }
 
+  private readBranchDetectSettings(): BranchDetectSettings {
+    const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+    const enabled = config.get<boolean>("mainBranchDetect.enabled", true);
+    const mainBranchNames = config.get<string[]>("mainBranchDetect.mainBranchNames", ["main", "master", "trunk"]);
+    const excludeAgentIdPattern = config.get<string>("mainBranchDetect.excludeAgentIdPattern", "");
+    return {
+      enabled,
+      mainBranchNames: Array.isArray(mainBranchNames) ? mainBranchNames : ["main", "master", "trunk"],
+      excludeAgentIdPattern
+    };
+  }
+
   private sendWorldInit(): void {
     if (!this.view || !this.webviewReady) {
       return;
@@ -225,7 +261,8 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
       type: "world_init",
       agents: world.agents,
       zones: world.zones,
-      skills: world.skills
+      skills: world.skills,
+      agentMds: this.agentMdResolver.getCatalog()
     } satisfies ExtToWebviewMessage);
 
     this.messageQueue = this.store.getFeed().map((event) => ({ type: "feed_append", event } satisfies ExtToWebviewMessage));

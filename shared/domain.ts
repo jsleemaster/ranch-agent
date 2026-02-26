@@ -2,6 +2,12 @@ export type SkillKind = "read" | "edit" | "write" | "bash" | "search" | "task" |
 export type HookGateState = "open" | "blocked" | "failed" | "closed";
 export type GrowthStage = "seed" | "sprout" | "grow" | "harvest";
 
+export interface AgentMdCatalogItem {
+  id: string;
+  label: string;
+  fileName: string;
+}
+
 export interface AgentSnapshot {
   agentId: string;
   teamId: string;
@@ -11,6 +17,11 @@ export interface AgentSnapshot {
   currentSkill: SkillKind | null;
   currentHookGate: HookGateState | null;
   currentZoneId: string | null;
+  branchName: string | null;
+  isMainBranch: boolean;
+  mainBranchRisk: boolean;
+  agentMdCallsTotal: number;
+  agentMdCallsById: Record<string, number>;
   usageCount: number;
   growthStage: GrowthStage;
   lastEventTs: number;
@@ -29,6 +40,9 @@ export interface FeedEvent {
   skill: SkillKind | null;
   hookGate: HookGateState | null;
   zoneId: string | null;
+  branchName?: string | null;
+  mainBranchRisk?: boolean;
+  invokedAgentMdId?: string | null;
   growthStage?: GrowthStage;
   text?: string;
 }

@@ -125,4 +125,35 @@ describe("SnapshotStore", () => {
     expect(world.skills).toHaveLength(8);
     expect(bashMetric).toEqual({ skill: "bash", usageCount: 5, growthStage: "sprout" });
   });
+
+  it("tracks invoked agent-md call counts per runtime agent", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-agent-md-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath),
+      folderMapper: new FolderMapper("/repo")
+    });
+
+    let update = store.applyRawEvent(makeEvent("tool_start", { invokedAgentMdId: "reviewer", ts: 1 }));
+    expect(update.agent.agentMdCallsTotal).toBe(1);
+    expect(update.agent.agentMdCallsById).toEqual({ reviewer: 1 });
+    expect(update.feed.invokedAgentMdId).toBe("reviewer");
+
+    update = store.applyRawEvent(makeEvent("tool_start", { invokedAgentMdId: "reviewer", ts: 2 }));
+    expect(update.agent.agentMdCallsTotal).toBe(2);
+    expect(update.agent.agentMdCallsById).toEqual({ reviewer: 2 });
+
+    update = store.applyRawEvent(makeEvent("tool_start", { invokedAgentMdId: "planner", ts: 3 }));
+    expect(update.agent.agentMdCallsTotal).toBe(3);
+    expect(update.agent.agentMdCallsById).toEqual({ reviewer: 2, planner: 1 });
+  });
 });

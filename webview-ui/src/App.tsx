@@ -34,6 +34,7 @@ function matchesAgent(agent: AgentSnapshot | undefined, filter: ReturnType<World
 export default function App(): JSX.Element {
   const world = useMemo(() => new WorldState(), []);
   const assets = useMemo(() => readAssetCatalog(), []);
+  const [feedExpanded, setFeedExpanded] = useState(false);
 
   useWorldMessages(world);
 
@@ -41,6 +42,23 @@ export default function App(): JSX.Element {
   useEffect(() => {
     return world.subscribe(() => forceRender((count) => count + 1));
   }, [world]);
+
+  useEffect(() => {
+    if (!feedExpanded) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFeedExpanded(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [feedExpanded]);
 
   const snapshot = world.getSnapshot();
 
@@ -55,13 +73,17 @@ export default function App(): JSX.Element {
   const activeCount = matchedAgents.filter((agent) => agent.state === "active").length;
   const waitingCount = matchedAgents.length - activeCount;
   const harvestCount = matchedAgents.filter((agent) => agent.growthStage === "harvest").length;
+  const mainRiskCount = matchedAgents.filter((agent) => agent.mainBranchRisk).length;
   const topSkill = snapshot.skills[0];
   const hasFilter = !!(snapshot.filter.selectedAgentId || snapshot.filter.selectedSkill || snapshot.filter.selectedZoneId);
+  const agentMdCatalogTitle =
+    snapshot.agentMds.length > 0
+      ? snapshot.agentMds.map((item) => item.label).join(", ")
+      : "workspace .claude/agents/*.md not found";
 
   return (
     <div className="app-shell">
       <header className="hud-bar" title="에이전트 목장">
-        <div className="hud-glyph">🐮</div>
         <div className="hud-meters">
           <span className="hud-pill" title={`visible agents: ${matchedAgents.length}/${snapshot.agents.length}`}>
             일꾼 {matchedAgents.length}
@@ -75,6 +97,12 @@ export default function App(): JSX.Element {
           <span className="hud-pill" title={`harvest stage: ${harvestCount}`}>
             수확 {harvestCount}
           </span>
+          <span className={`hud-pill ${mainRiskCount > 0 ? "warn" : ""}`.trim()} title={`agents on protected branches: ${mainRiskCount}`}>
+            메인위험 {mainRiskCount}
+          </span>
+          <span className="hud-pill" title={agentMdCatalogTitle}>
+            등록에이전트 {snapshot.agentMds.length}
+          </span>
           <span className="hud-pill" title={topSkill ? `top skill: ${topSkill.skill} (${topSkill.usageCount})` : "top skill: none"}>
             상위 {topSkill?.usageCount ?? 0}
           </span>
@@ -86,8 +114,10 @@ export default function App(): JSX.Element {
 
       <main className="panel-grid">
         <section className="panel enter-a panel-agents" data-icon="🐴" title="일꾼 우리">
+          <div className="panel-label">일꾼 우리</div>
           <AgentBoard
             agents={snapshot.agents}
+            agentMds={snapshot.agentMds}
             filter={snapshot.filter}
             assets={assets}
             onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
@@ -95,6 +125,7 @@ export default function App(): JSX.Element {
         </section>
 
         <section className="panel enter-b panel-flow" data-icon="🧭" title="작업 동선">
+          <div className="panel-label">작업 동선</div>
           <SkillFlowPanel
             agents={snapshot.agents}
             skillMetrics={snapshot.skills}
@@ -105,7 +136,8 @@ export default function App(): JSX.Element {
           />
         </section>
 
-        <section className="panel enter-c panel-map" data-icon="🌾" title="목장 구역">
+        <section className="panel enter-c panel-map panel-no-icon" title="목장 구역">
+          <div className="panel-label">목장 구역</div>
           <FolderMapPanel
             zones={snapshot.zones}
             agents={snapshot.agents}
@@ -116,6 +148,14 @@ export default function App(): JSX.Element {
         </section>
 
         <section className="panel enter-d panel-feed" data-icon="📜" title="작업 일지">
+          <div className="panel-label">작업 일지</div>
+          <button
+            className="panel-expand-btn"
+            title="작업 일지 확대 보기"
+            onClick={() => setFeedExpanded(true)}
+          >
+            확대
+          </button>
           <LiveFeedPanel
             events={snapshot.feed}
             filter={snapshot.filter}
@@ -124,6 +164,26 @@ export default function App(): JSX.Element {
           />
         </section>
       </main>
+
+      {feedExpanded ? (
+        <div className="feed-overlay" onClick={() => setFeedExpanded(false)}>
+          <section className="feed-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="feed-modal-header">
+              <div className="feed-modal-title">📜 작업 일지</div>
+              <button className="feed-modal-close" onClick={() => setFeedExpanded(false)}>
+                닫기
+              </button>
+            </header>
+            <LiveFeedPanel
+              events={snapshot.feed}
+              filter={snapshot.filter}
+              assets={assets}
+              onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
+              variant="overlay"
+            />
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

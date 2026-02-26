@@ -10,6 +10,21 @@ type JsonObject = Record<string, unknown>;
 
 const TOOL_START_HINTS = new Set(["tool_start", "tool_use", "tool_call_start", "tool_called", "tool_invoked"]);
 const TOOL_DONE_HINTS = new Set(["tool_done", "tool_result", "tool_call_end", "tool_finished", "tool_use_done"]);
+const AGENT_MD_PATH_PATTERN = /(?:^|\/)\.claude\/agents\/([a-z0-9._-]+)\.md(?:$|[?#/])/i;
+
+interface ContentSignals {
+  toolUse: {
+    id?: string;
+    name?: string;
+    input?: JsonObject;
+  } | null;
+  toolResult: {
+    toolUseId?: string;
+    isError?: boolean;
+    contentText?: string;
+  } | null;
+  textParts: string[];
+}
 
 function asObject(value: unknown): JsonObject | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -78,6 +93,93 @@ function pickBoolean(value: unknown, pathKeys: string[]): boolean | undefined {
   return undefined;
 }
 
+function readString(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const raw = (value as Record<string, unknown>)[key];
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readBoolean(value: unknown, key: string): boolean | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const raw = (value as Record<string, unknown>)[key];
+  if (typeof raw === "boolean") {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    if (raw.toLowerCase() === "true") {
+      return true;
+    }
+    if (raw.toLowerCase() === "false") {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function asArray(value: unknown): unknown[] | null {
+  return Array.isArray(value) ? value : null;
+}
+
+function parseContentSignals(obj: JsonObject): ContentSignals {
+  const signals: ContentSignals = {
+    toolUse: null,
+    toolResult: null,
+    textParts: []
+  };
+
+  const messageObj = asObject(readPath(obj, "message"));
+  const content = asArray(messageObj?.content) ?? asArray(readPath(obj, "content")) ?? [];
+
+  for (const item of content) {
+    if (typeof item === "string") {
+      const text = item.trim();
+      if (text.length > 0) {
+        signals.textParts.push(text);
+      }
+      continue;
+    }
+
+    const node = asObject(item);
+    if (!node) {
+      continue;
+    }
+
+    const nodeType = readString(node, "type")?.toLowerCase();
+    const text = readString(node, "text") ?? readString(node, "message") ?? readString(node, "content");
+    if (text) {
+      signals.textParts.push(text);
+    }
+
+    if (nodeType === "tool_use" && !signals.toolUse) {
+      signals.toolUse = {
+        id: readString(node, "id"),
+        name: readString(node, "name"),
+        input: asObject(node.input) ?? undefined
+      };
+      continue;
+    }
+
+    const toolUseId = readString(node, "tool_use_id");
+    if ((nodeType === "tool_result" || toolUseId) && !signals.toolResult) {
+      signals.toolResult = {
+        toolUseId: toolUseId,
+        isError: readBoolean(node, "is_error"),
+        contentText: readString(node, "content")
+      };
+    }
+  }
+
+  return signals;
+}
+
 function inferTimestampMs(raw: unknown, now: () => number): number {
   if (typeof raw === "number" && Number.isFinite(raw)) {
     if (raw > 1_000_000_000_000) {
@@ -101,7 +203,14 @@ function inferTimestampMs(raw: unknown, now: () => number): number {
   return now();
 }
 
-function inferEventType(obj: JsonObject, toolName: string | undefined): RuntimeEventType | null {
+function inferEventType(obj: JsonObject, toolName: string | undefined, contentSignals: ContentSignals): RuntimeEventType | null {
+  if (contentSignals.toolUse) {
+    return "tool_start";
+  }
+  if (contentSignals.toolResult) {
+    return "tool_done";
+  }
+
   const rawHint =
     pickString(obj, ["type", "event", "kind", "message_type", "payload.type", "payload.event"])?.toLowerCase() ?? "";
 
@@ -158,7 +267,7 @@ function inferEventType(obj: JsonObject, toolName: string | undefined): RuntimeE
   return null;
 }
 
-function inferDetail(obj: JsonObject): string | undefined {
+function inferDetail(obj: JsonObject, contentSignals: ContentSignals): string | undefined {
   const fromText = pickString(obj, [
     "detail",
     "text",
@@ -172,29 +281,29 @@ function inferDetail(obj: JsonObject): string | undefined {
   if (fromText) {
     return fromText;
   }
-  const contentArray = readPath(obj, "content");
-  if (Array.isArray(contentArray)) {
-    const joined = contentArray
-      .map((item) => {
-        if (typeof item === "string") {
-          return item;
-        }
-        const node = asObject(item);
-        if (!node) {
-          return "";
-        }
-        return pickString(node, ["text", "message"]) ?? "";
-      })
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    return joined.length > 0 ? joined : undefined;
+
+  const toolInput = contentSignals.toolUse?.input;
+  const fromToolInput = pickString(toolInput, ["description", "prompt", "command", "activeForm", "subject"]);
+  if (fromToolInput) {
+    return fromToolInput;
   }
+
+  if (contentSignals.toolResult?.contentText) {
+    return contentSignals.toolResult.contentText;
+  }
+
+  if (contentSignals.textParts.length > 0) {
+    const joined = contentSignals.textParts.join(" ").trim();
+    if (joined.length > 0) {
+      return joined;
+    }
+  }
+
   return undefined;
 }
 
-function inferFilePath(obj: JsonObject): string | undefined {
-  return pickString(obj, [
+function inferFilePath(obj: JsonObject, contentSignals: ContentSignals): string | undefined {
+  const direct = pickString(obj, [
     "filePath",
     "file_path",
     "path",
@@ -209,6 +318,64 @@ function inferFilePath(obj: JsonObject): string | undefined {
     "arguments.file_path",
     "arguments.path"
   ]);
+  if (direct) {
+    return direct;
+  }
+
+  return pickString(contentSignals.toolUse?.input, ["filePath", "file_path", "path"]);
+}
+
+function inferWorkingDir(obj: JsonObject): string | undefined {
+  return pickString(obj, [
+    "cwd",
+    "working_directory",
+    "workingDirectory",
+    "workspace",
+    "workspace_root",
+    "project_dir",
+    "input.cwd",
+    "tool_input.cwd",
+    "arguments.cwd"
+  ]);
+}
+
+function inferBranchName(obj: JsonObject): string | null {
+  const value = pickString(obj, [
+    "branch",
+    "gitBranch",
+    "branch_name",
+    "git_branch",
+    "git.branch",
+    "metadata.branch",
+    "payload.branch"
+  ]);
+  if (!value) {
+    return null;
+  }
+  return value;
+}
+
+function inferInvokedAgentHint(obj: JsonObject, contentSignals: ContentSignals): string | null {
+  const fromInput = pickString(contentSignals.toolUse?.input, ["subagent_type", "subagentType", "agent", "agent_name"]);
+  if (fromInput) {
+    return fromInput;
+  }
+
+  const direct = pickString(obj, ["subagent_type", "subagentType", "agent", "agent_name"]);
+  if (direct) {
+    return direct;
+  }
+
+  const fromText = inferDetail(obj, contentSignals);
+  if (!fromText) {
+    return null;
+  }
+
+  const matched = fromText.replace(/\\/g, "/").match(AGENT_MD_PATH_PATTERN);
+  if (!matched?.[1]) {
+    return null;
+  }
+  return matched[1];
 }
 
 export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRuntimeEvent | null {
@@ -230,11 +397,21 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
   }
 
   const agentRuntimeId =
-    pickString(obj, ["agentRuntimeId", "agentId", "agent_id", "session_id", "conversation_id", "request_id"]) ??
+    pickString(obj, [
+      "agentRuntimeId",
+      "agentId",
+      "agent_id",
+      "sessionId",
+      "session_id",
+      "conversation_id",
+      "requestId",
+      "request_id"
+    ]) ??
     options.fallbackAgentRuntimeId;
 
-  const toolName = pickString(obj, ["toolName", "tool_name", "tool.name", "name"]);
-  const eventType = inferEventType(obj, toolName);
+  const contentSignals = parseContentSignals(obj);
+  const toolName = pickString(obj, ["toolName", "tool_name", "tool.name", "name"]) ?? contentSignals.toolUse?.name;
+  const eventType = inferEventType(obj, toolName, contentSignals);
   if (!eventType) {
     return null;
   }
@@ -246,8 +423,10 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
   const status = pickString(obj, ["status", "state", "result.status", "payload.status"])?.toLowerCase();
   const explicitError = pickBoolean(obj, ["isError", "is_error", "error", "result.error"]);
   const hasErrorObject = asObject(readPath(obj, "error")) !== null;
-  const inferredError = hasErrorObject || status === "error" || status === "failed";
+  const inferredError = hasErrorObject || status === "error" || status === "failed" || contentSignals.toolResult?.isError === true;
   const isError = explicitError ?? inferredError;
+  const detail = inferDetail(obj, contentSignals);
+  const invokedAgentHint = inferInvokedAgentHint(obj, contentSignals);
 
   return {
     runtime: options.runtime ?? "claude-jsonl",
@@ -255,9 +434,12 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
     ts,
     type: eventType,
     toolName,
-    toolId: pickString(obj, ["toolId", "tool_id", "tool.id", "id"]),
-    filePath: inferFilePath(obj),
-    detail: inferDetail(obj),
+    toolId: pickString(obj, ["toolId", "tool_id", "tool.id", "id"]) ?? contentSignals.toolUse?.id ?? contentSignals.toolResult?.toolUseId,
+    filePath: inferFilePath(obj, contentSignals),
+    workingDir: inferWorkingDir(obj),
+    branchName: inferBranchName(obj),
+    invokedAgentHint,
+    detail,
     isError
   };
 }

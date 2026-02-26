@@ -45,4 +45,37 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed?.type).toBe("tool_done");
     expect(parsed?.isError).toBe(true);
   });
+
+  it("parses claude content tool_use with subagent_type", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      sessionId: "sess-1",
+      gitBranch: "main",
+      cwd: "/repo",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_1",
+            name: "Task",
+            input: {
+              subagent_type: "reviewer",
+              prompt: "Use .claude/agents/reviewer.md to review changes"
+            }
+          }
+        ]
+      },
+      timestamp: "2026-02-26T08:30:00.000Z"
+    });
+
+    const parsed = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: "fallback" });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.type).toBe("tool_start");
+    expect(parsed?.toolName).toBe("Task");
+    expect(parsed?.toolId).toBe("toolu_1");
+    expect(parsed?.agentRuntimeId).toBe("sess-1");
+    expect(parsed?.branchName).toBe("main");
+    expect(parsed?.invokedAgentHint).toBe("reviewer");
+  });
 });
