@@ -151,10 +151,10 @@ export default function App(): JSX.Element {
           <div className="panel-label">작업 일지</div>
           <button
             className="panel-expand-btn"
-            title="작업 일지 확대 보기"
+            title="작업 일지 더보기"
             onClick={() => setFeedExpanded(true)}
           >
-            확대
+            더보기
           </button>
           <LiveFeedPanel
             events={snapshot.feed}

@@ -194,7 +194,7 @@ body::after {
 
 .panel-feed {
   align-self: end;
-  height: clamp(180px, 28vh, 260px);
+  height: clamp(140px, 20vh, 190px);
 }
 
 .panel-expand-btn {
@@ -545,7 +545,7 @@ body::after {
   justify-content: start;
   align-items: center;
   gap: 6px;
-  padding: 5px 7px;
+  padding: 4px 7px;
   cursor: pointer;
   transition: opacity 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
@@ -590,11 +590,12 @@ body::after {
 }
 
 .feed-detail {
-  font-size: 12px;
+  font-size: 11px;
   color: #b4bfce;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .feed-growth {
