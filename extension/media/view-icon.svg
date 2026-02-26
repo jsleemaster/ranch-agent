@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="ops room">
+  <rect x="8" y="8" width="112" height="112" rx="20" fill="#1E2B3A"/>
+  <rect x="20" y="22" width="88" height="18" rx="9" fill="#4AA3A2"/>
+  <circle cx="36" cy="74" r="12" fill="#7EE787"/>
+  <circle cx="64" cy="74" r="12" fill="#8BC37F"/>
+  <circle cx="92" cy="74" r="12" fill="#D3AA73"/>
+</svg>

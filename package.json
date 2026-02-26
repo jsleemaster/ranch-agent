@@ -1,0 +1,13 @@
+{
+  "name": "packmen-agents",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "extension",
+    "webview-ui"
+  ],
+  "scripts": {
+    "build": "npm --prefix webview-ui run build && npm --prefix extension run build",
+    "watch": "npm --prefix webview-ui run build:watch"
+  }
+}

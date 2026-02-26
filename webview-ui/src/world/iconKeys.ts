@@ -1,0 +1,130 @@
+import type { AgentSnapshot, GrowthStage, HookGateState, SkillKind } from "@shared/domain";
+import type { WebviewAssetCatalog } from "@shared/assets";
+
+const SKILL_EMOJI: Record<SkillKind, string> = {
+  read: "📖",
+  edit: "✏️",
+  write: "🧱",
+  bash: "🛠️",
+  search: "🔎",
+  task: "📦",
+  ask: "❓",
+  other: "🧩"
+};
+
+const GATE_EMOJI: Record<HookGateState, string> = {
+  open: "🟢",
+  blocked: "🟡",
+  failed: "🔴",
+  closed: "⚪"
+};
+
+const ZONE_EMOJI: Record<string, string> = {
+  src: "🌾",
+  apps: "🐄",
+  packages: "🐓",
+  infra: "🏚️",
+  scripts: "🏇",
+  docs: "📋",
+  tests: "🧪",
+  etc: "🪵"
+};
+
+const ZONE_LABELS: Record<string, string> = {
+  src: "목초지",
+  apps: "우사",
+  packages: "양계장",
+  infra: "사료공방",
+  scripts: "훈련목장",
+  docs: "관리동",
+  tests: "진료소",
+  etc: "야적장"
+};
+
+const TEAM_EMOJI_BY_ICON: Record<string, string> = {
+  team_default: "🐮",
+  team_solo: "🐴"
+};
+
+const GROWTH_EMOJI_BY_STAGE: Record<GrowthStage, string> = {
+  seed: "🌱",
+  sprout: "🌿",
+  grow: "🌾",
+  harvest: "🧺"
+};
+
+export function skillIconKey(skill: SkillKind | null): string {
+  return `skill_${skill ?? "other"}`;
+}
+
+export function gateIconKey(gate: HookGateState | null): string {
+  return `gate_${gate ?? "closed"}`;
+}
+
+export function zoneIconKey(zoneId: string | null): string {
+  return `zone_${zoneId ?? "etc"}`;
+}
+
+export function teamIconKey(agent: AgentSnapshot): string {
+  return agent.icon || "team_default";
+}
+
+export function iconUrl(catalog: WebviewAssetCatalog, key: string): string | undefined {
+  if (catalog.source === "placeholder-pack" || catalog.source === "primitive") {
+    return undefined;
+  }
+  return catalog.icons[key];
+}
+
+export function spriteUrl(catalog: WebviewAssetCatalog, state: AgentSnapshot["state"]): string | undefined {
+  if (catalog.source === "placeholder-pack" || catalog.source === "primitive") {
+    return undefined;
+  }
+  return catalog.sprites[state === "active" ? "agent_active" : "agent_idle"];
+}
+
+export function tileUrl(catalog: WebviewAssetCatalog, zoneId: string): string | undefined {
+  if (catalog.source === "placeholder-pack" || catalog.source === "primitive") {
+    return undefined;
+  }
+  return catalog.tiles[`zone_${zoneId}`];
+}
+
+export function teamEmoji(agent: AgentSnapshot): string {
+  return TEAM_EMOJI_BY_ICON[teamIconKey(agent)] ?? TEAM_EMOJI_BY_ICON.team_default;
+}
+
+export function skillEmoji(skill: SkillKind | null): string {
+  if (!skill) {
+    return SKILL_EMOJI.other;
+  }
+  return SKILL_EMOJI[skill] ?? SKILL_EMOJI.other;
+}
+
+export function gateEmoji(gate: HookGateState | null): string {
+  if (!gate) {
+    return GATE_EMOJI.closed;
+  }
+  return GATE_EMOJI[gate] ?? GATE_EMOJI.closed;
+}
+
+export function zoneEmoji(zoneId: string | null): string {
+  if (!zoneId) {
+    return ZONE_EMOJI.etc;
+  }
+  return ZONE_EMOJI[zoneId] ?? ZONE_EMOJI.etc;
+}
+
+export function zoneLabel(zoneId: string | null): string {
+  if (!zoneId) {
+    return "전체";
+  }
+  return ZONE_LABELS[zoneId] ?? zoneId;
+}
+
+export function growthEmoji(stage: GrowthStage | null | undefined): string {
+  if (!stage) {
+    return GROWTH_EMOJI_BY_STAGE.seed;
+  }
+  return GROWTH_EMOJI_BY_STAGE[stage] ?? GROWTH_EMOJI_BY_STAGE.seed;
+}

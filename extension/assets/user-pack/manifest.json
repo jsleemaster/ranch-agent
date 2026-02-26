@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "icons": {
+    "team_default": "icons/team_default.png",
+    "team_solo": "icons/team_solo.png",
+    "skill_read": "icons/skill_read.png",
+    "skill_edit": "icons/skill_edit.png",
+    "skill_write": "icons/skill_write.png",
+    "skill_bash": "icons/skill_bash.png",
+    "skill_search": "icons/skill_search.png",
+    "skill_task": "icons/skill_task.png",
+    "skill_ask": "icons/skill_ask.png",
+    "skill_other": "icons/skill_other.png",
+    "gate_open": "icons/gate_open.png",
+    "gate_blocked": "icons/gate_blocked.png",
+    "gate_failed": "icons/gate_failed.png",
+    "gate_closed": "icons/gate_closed.png",
+    "zone_src": "icons/zone_src.png",
+    "zone_apps": "icons/zone_apps.png",
+    "zone_packages": "icons/zone_packages.png",
+    "zone_infra": "icons/zone_infra.png",
+    "zone_scripts": "icons/zone_scripts.png",
+    "zone_docs": "icons/zone_docs.png",
+    "zone_tests": "icons/zone_tests.png",
+    "zone_etc": "icons/zone_etc.png"
+  },
+  "sprites": {
+    "agent_idle": "sprites/agent_idle.png",
+    "agent_active": "sprites/agent_active.png"
+  },
+  "tiles": {
+    "zone_src": "tiles/zone_src.png",
+    "zone_apps": "tiles/zone_apps.png",
+    "zone_packages": "tiles/zone_packages.png",
+    "zone_infra": "tiles/zone_infra.png",
+    "zone_scripts": "tiles/zone_scripts.png",
+    "zone_docs": "tiles/zone_docs.png",
+    "zone_tests": "tiles/zone_tests.png",
+    "zone_etc": "tiles/zone_etc.png"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "icons": {
+    "team_default": "icons/team_default.png",
+    "skill_read": "icons/skill_read.png"
+  },
+  "sprites": {
+    "agent_idle": "sprites/agent_idle.png",
+    "agent_active": "sprites/agent_active.png"
+  },
+  "tiles": {
+    "zone_src": "tiles/zone_src.png"
+  }
+}

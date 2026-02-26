@@ -1,0 +1,66 @@
+{
+  "name": "ranch-agent-extension",
+  "displayName": "Ranch-Agent",
+  "description": "Emoji-first multi-agent ranch visualization for Claude JSONL",
+  "private": true,
+  "version": "0.1.0",
+  "publisher": "local",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onView:expeditionSituationRoom.view",
+    "onCommand:expeditionSituationRoom.focus"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "expeditionSituationRoom.focus",
+        "title": "Ranch-Agent: Focus Ranch"
+      }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "expeditionSituationRoom",
+          "title": "Ranch-Agent",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "expeditionSituationRoom": [
+        {
+          "id": "expeditionSituationRoom.view",
+          "name": "Ranch-Agent",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Ranch-Agent",
+      "properties": {
+        "expeditionSituationRoom.runtimeJsonlPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to Claude JSONL runtime transcript to watch."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
