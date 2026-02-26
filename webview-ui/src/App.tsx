@@ -113,7 +113,7 @@ export default function App(): JSX.Element {
       </header>
 
       <main className="panel-grid">
-        <section className="panel enter-a panel-agents" data-icon="🐴" title="일꾼 우리">
+        <section className="panel enter-a panel-agents" title="일꾼 우리">
           <div className="panel-label">일꾼 우리</div>
           <AgentBoard
             agents={snapshot.agents}
@@ -124,7 +124,7 @@ export default function App(): JSX.Element {
           />
         </section>
 
-        <section className="panel enter-b panel-flow" data-icon="🧭" title="작업 동선">
+        <section className="panel enter-b panel-flow" title="작업 동선">
           <div className="panel-label">작업 동선</div>
           <SkillFlowPanel
             agents={snapshot.agents}
@@ -136,7 +136,7 @@ export default function App(): JSX.Element {
           />
         </section>
 
-        <section className="panel enter-c panel-map panel-no-icon" title="목장 구역">
+        <section className="panel enter-c panel-map" title="목장 구역">
           <div className="panel-label">목장 구역</div>
           <FolderMapPanel
             zones={snapshot.zones}
@@ -147,7 +147,7 @@ export default function App(): JSX.Element {
           />
         </section>
 
-        <section className="panel enter-d panel-feed" data-icon="📜" title="작업 일지">
+        <section className="panel enter-d panel-feed" title="작업 일지">
           <div className="panel-label">작업 일지</div>
           <button
             className="panel-expand-btn"
