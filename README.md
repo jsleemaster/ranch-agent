@@ -117,6 +117,57 @@ npx @vscode/vsce package
    - skill 선택
    - zone 선택
 
+## Usage Guide (Step-by-Step)
+
+### A. 처음 1회 설정
+
+1. Command Palette에서 `Ranch-Agent: Focus Ranch` 실행
+2. 하단 패널에 `RANCH-AGENT` 탭이 열리는지 확인
+3. VS Code Settings에서 필요 시 JSONL 경로를 직접 지정:
+
+```json
+{
+  "expeditionSituationRoom.runtimeJsonlPath": "/absolute/path/to/your-session.jsonl"
+}
+```
+
+설정값이 비어 있으면 자동 탐색 모드로 동작합니다.
+
+### B. 실시간 동작 확인 (가장 빠른 방법)
+
+1. Ranch-Agent가 켜진 동일 workspace에서 Claude/Codex 작업을 실제로 실행
+2. 툴 실행/완료 이벤트가 발생하면 화면이 `...` 상태에서 즉시 갱신
+3. 아래 4개 패널이 함께 변하는지 확인:
+   - `일꾼 우리`: 에이전트 현재 상태, 스킬, 게이트, 성장 단계
+   - `작업 동선`: agent -> skill -> gate 흐름 강조
+   - `목장 구역`: 폴더 zone 기준 위치 변화
+   - `작업 일지`: 최근 이벤트 로그(최대 200개)
+
+### C. 분석 모드로 보기
+
+1. `일꾼 우리`에서 에이전트를 클릭하면 전체 패널이 해당 에이전트 중심으로 필터
+2. `작업 동선`에서 스킬을 클릭하면 해당 스킬 사용 흐름만 강조
+3. `목장 구역`에서 구역을 클릭하면 해당 zone 이벤트만 집중 표시
+4. 다시 클릭하면 필터 해제
+
+### D. 성장 단계 읽는 법
+
+- `seed`: 0-4
+- `sprout`: 5-14
+- `grow`: 15-34
+- `harvest`: 35+
+
+증가 트리거 이벤트는 `tool_start`, `tool_done`, `assistant_text` 입니다.
+
+### E. 자주 헷갈리는 포인트
+
+- 패널이 열렸는데 데이터가 없음:
+  - UI 문제보다 입력(JSONL) 부재인 경우가 대부분입니다.
+- 다른 프로젝트에서 쓰고 싶음:
+  - 해당 프로젝트를 workspace로 열고 Ranch-Agent를 실행해야 자동 탐색 경로가 맞아집니다.
+- 수동 경로가 더 안정적일 때:
+  - 멀티 세션/멀티 창 환경이면 `runtimeJsonlPath`를 명시하는 것이 가장 확실합니다.
+
 ## Asset Strategy
 
 - 기본 렌더 우선순위:
