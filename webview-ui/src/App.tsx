@@ -35,7 +35,6 @@ export default function App(): JSX.Element {
   const world = useMemo(() => new WorldState(), []);
   const assets = useMemo(() => readAssetCatalog(), []);
   const [feedExpanded, setFeedExpanded] = useState(false);
-  const [rightView, setRightView] = useState<"pipeline" | "ranch">("pipeline");
 
   useWorldMessages(world);
 
@@ -116,39 +115,27 @@ export default function App(): JSX.Element {
 
         <div className="right-content-col">
           <section className="panel panel-flow">
-            <div className="view-toggle">
-              <button
-                className={`view-toggle-btn ${rightView === "pipeline" ? "on" : ""}`}
-                onClick={() => setRightView("pipeline")}
-              >
-                📊 파이프라인
-              </button>
-              <button
-                className={`view-toggle-btn ${rightView === "ranch" ? "on" : ""}`}
-                onClick={() => setRightView("ranch")}
-              >
-                🗺️ 목장 현황
-              </button>
-            </div>
-
-            {rightView === "pipeline" ? (
-              <SkillFlowPanel
-                agents={snapshot.agents}
-                skillMetrics={snapshot.skills}
-                filter={snapshot.filter}
-                assets={assets}
-                onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
-                onSelectSkill={(skill) => send({ type: "select_skill", skill })}
-              />
-            ) : (
+            <SkillFlowPanel
+              agents={snapshot.agents}
+              skillMetrics={snapshot.skills}
+              filter={snapshot.filter}
+              assets={assets}
+              onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
+              onSelectSkill={(skill) => send({ type: "select_skill", skill })}
+            />
+            
+            {/* Phase 12: Ranch Minimap Overlay */}
+            <div className="ranch-minimap-wrap">
+              <div className="minimap-label">🗺️ 목장 미니맵</div>
               <FolderMapPanel
                 zones={snapshot.zones}
                 agents={snapshot.agents}
                 filter={snapshot.filter}
                 assets={assets}
                 onSelectZone={(zoneId) => send({ type: "select_zone", zoneId })}
+                isMinimap={true}
               />
-            )}
+            </div>
           </section>
         </div>
       </main>
