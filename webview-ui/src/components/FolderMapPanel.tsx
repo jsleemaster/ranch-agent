@@ -324,7 +324,7 @@ export default function FolderMapPanel({
         if (sprite) {
           context.drawImage(sprite, x, y, size, size);
         } else {
-          context.fillStyle = agent.state === "active" ? "#7CC66E" : "#A89478";
+          context.fillStyle = agent.state === "active" ? "#7CC66E" : agent.state === "completed" ? "#8FA2B5" : "#A89478";
           context.beginPath(); context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2); context.fill();
         }
 

@@ -3,15 +3,13 @@ import React, { useMemo } from "react";
 import type { WebviewAssetCatalog } from "@shared/assets";
 import type { AgentSnapshot, FilterState, SkillKind, SkillMetricSnapshot } from "@shared/domain";
 import {
+  agentAvatarEmoji,
   gateEmoji,
-  growthEmoji,
   iconUrl,
   skillEmoji,
   skillIconKey,
-  teamEmoji,
   teamIconKey,
-  zoneEmoji,
-  zoneLabel
+  teamEmoji
 } from "../world/iconKeys";
 import IconToken from "./IconToken";
 
@@ -96,12 +94,6 @@ function xpPercent(growthLevelUsage: number): number {
   return Math.min(100, Math.round((growthLevelUsage / 34) * 100));
 }
 
-function formatTokens(n: number | undefined): string {
-  if (!n) return "0";
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
-}
-
 export default function SkillFlowPanel({
   agents,
   skillMetrics: _skillMetrics,
@@ -146,7 +138,7 @@ export default function SkillFlowPanel({
             <div className="pipeline-avatar">
               <IconToken
                 src={teamIcon}
-                fallback={teamEmoji(agent)}
+                fallback={agentAvatarEmoji(agent) || teamEmoji(agent)}
                 title={agent.agentId}
                 className="pipeline-avatar-icon"
               />
@@ -158,6 +150,7 @@ export default function SkillFlowPanel({
               <div className="pipeline-name">
                 {shortId(agent.agentId)}
                 <span className={`pipeline-role role-${agent.runtimeRole}`}>{runtimeRoleLabel(agent.runtimeRole)}</span>
+                {agent.state === "completed" && <span className="pipeline-status completed">완료</span>}
               </div>
               <div className="pipeline-xp-bar">
                 <div
@@ -166,9 +159,9 @@ export default function SkillFlowPanel({
                 />
                 <span
                   className="pipeline-xp-label"
-                  title={`레벨 ${agent.growthLevel} · 단계 ${growthLabel(agent.growthStage)} · 진행도 ${agent.growthLevelUsage}/35`}
+                  title={`경험치 진행도: ${agent.growthLevelUsage}/35 · 단계 ${growthLabel(agent.growthStage)}`}
                 >
-                  Lv.{agent.growthLevel} {growthEmoji(agent.growthStage)} {growthLabel(agent.growthStage)} ({agent.growthLevelUsage}/35)
+                  XP {agent.growthLevelUsage}/35
                 </span>
               </div>
             </div>
@@ -193,49 +186,10 @@ export default function SkillFlowPanel({
               )}
             </div>
 
-            {/* Flow Arrow */}
-            <div className="pipeline-arrow">
-              <div className={`pipeline-arrow-line ${agent.state}`} />
-              <div className={`pipeline-arrow-dot ${agent.state}`} />
-            </div>
-
             {/* Gate Status */}
             <div className={`pipeline-gate ${gateStatusClass(gate)}`}>
               <div className="pipeline-gate-orb" />
               <span className="pipeline-gate-label">{gateStatusLabel(gate)}</span>
-            </div>
-
-            {/* Flow Arrow */}
-            <div className="pipeline-arrow">
-              <div className={`pipeline-arrow-line ${agent.state}`} />
-              <div className={`pipeline-arrow-dot ${agent.state}`} />
-            </div>
-
-            {/* Zone */}
-            <div className="pipeline-zone">
-              <span className="pipeline-zone-icon">{zoneEmoji(agent.currentZoneId)}</span>
-              <span className="pipeline-zone-label">{zoneLabel(agent.currentZoneId)}</span>
-            </div>
-
-            {/* Token Meter (사료 바) */}
-            <div className="pipeline-token-meter" title={`투입 사료: ${(agent.promptTokensTotal ?? 0).toLocaleString()} / 산출물: ${(agent.completionTokensTotal ?? 0).toLocaleString()}`}>
-              <div className="token-bar">
-                {(() => {
-                  const total = (agent.totalTokensTotal ?? 0);
-                  const prompt = (agent.promptTokensTotal ?? 0);
-                  const completion = (agent.completionTokensTotal ?? 0);
-                  if (total === 0) return <div className="token-fill-empty" />;
-                  const pRatio = `${(prompt / total * 100).toFixed(0)}%`;
-                  const cRatio = `${(completion / total * 100).toFixed(0)}%`;
-                  return (
-                    <>
-                      <div className="token-fill prompt" style={{ width: pRatio }} />
-                      <div className="token-fill completion" style={{ width: cRatio }} />
-                    </>
-                  );
-                })()}
-              </div>
-              <span className="token-total">🌾 {formatTokens(agent.totalTokensTotal)}</span>
             </div>
 
             {/* Stats */}

@@ -20,7 +20,7 @@ export interface AgentSnapshot {
   teamId: string;
   icon: string;
   color: string;
-  state: "active" | "waiting";
+  state: "active" | "waiting" | "completed";
   runtimeRole: AgentRuntimeRole;
   currentSkill: SkillKind | null;
   currentHookGate: HookGateState | null;

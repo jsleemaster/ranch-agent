@@ -71,7 +71,8 @@ export default function App(): JSX.Element {
   };
 
   const activeCount = matchedAgents.filter((agent) => agent.state === "active").length;
-  const waitingCount = matchedAgents.length - activeCount;
+  const waitingCount = matchedAgents.filter((agent) => agent.state === "waiting").length;
+  const completedCount = matchedAgents.filter((agent) => agent.state === "completed").length;
   const hasFilter = !!(snapshot.filter.selectedAgentId || snapshot.filter.selectedSkill || snapshot.filter.selectedZoneId);
   const totalTokens = snapshot.agents.reduce((sum, a) => sum + (a.totalTokensTotal ?? 0), 0);
 
@@ -88,6 +89,9 @@ export default function App(): JSX.Element {
           </span>
           <span className="hud-pill" title={`waiting: ${waitingCount}`}>
             대기 {waitingCount}
+          </span>
+          <span className="hud-pill" title={`completed: ${completedCount}`}>
+            완료 {completedCount}
           </span>
           <span className={`hud-pill ${hasFilter ? "on" : ""}`.trim()} title="filter state">
             필터 {hasFilter ? "ON" : "OFF"}

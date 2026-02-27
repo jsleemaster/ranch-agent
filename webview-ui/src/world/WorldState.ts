@@ -16,6 +16,13 @@ const FEED_LIMIT = 200;
 const GROWTH_STAGES = new Set<GrowthStage>(["seed", "sprout", "grow", "harvest"]);
 const GROWTH_LEVEL_SPAN = 35;
 
+function asAgentState(value: unknown): AgentSnapshot["state"] {
+  if (value === "active" || value === "waiting" || value === "completed") {
+    return value;
+  }
+  return "waiting";
+}
+
 function asGrowthStage(value: unknown): GrowthStage {
   if (typeof value === "string" && GROWTH_STAGES.has(value as GrowthStage)) {
     return value as GrowthStage;
@@ -133,6 +140,7 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
   const skillUsageByKind = normalizeSkillUsageByKind(candidate.skillUsageByKind);
   return {
     ...agent,
+    state: asAgentState((candidate as { state?: unknown }).state),
     runtimeRole,
     branchName,
     isMainBranch,

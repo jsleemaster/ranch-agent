@@ -46,12 +46,25 @@ const TEAM_EMOJI_BY_ICON: Record<string, string> = {
   team_solo: "🐴"
 };
 
+const TEAM_EMOJI_VARIANTS: Record<string, readonly string[]> = {
+  team_default: ["🐮", "🐄", "🐂", "🐃"],
+  team_solo: ["🐴", "🐎", "🦄", "🫏"]
+};
+
 const GROWTH_EMOJI_BY_STAGE: Record<GrowthStage, string> = {
   seed: "🌱",
   sprout: "🌿",
   grow: "🌾",
   harvest: "🧺"
 };
+
+function hashText(value: string): number {
+  let h = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    h = Math.imul(31, h) + value.charCodeAt(i) | 0;
+  }
+  return Math.abs(h);
+}
 
 export function skillIconKey(skill: SkillKind | null): string {
   return `skill_${skill ?? "other"}`;
@@ -94,6 +107,13 @@ export function teamEmoji(agent: AgentSnapshot): string {
   return TEAM_EMOJI_BY_ICON[teamIconKey(agent)] ?? TEAM_EMOJI_BY_ICON.team_default;
 }
 
+export function agentAvatarEmoji(agent: AgentSnapshot): string {
+  const iconKey = teamIconKey(agent);
+  const variants = TEAM_EMOJI_VARIANTS[iconKey] ?? TEAM_EMOJI_VARIANTS.team_default;
+  const idx = hashText(agent.agentId || iconKey) % variants.length;
+  return variants[idx] ?? teamEmoji(agent);
+}
+
 export function skillEmoji(skill: SkillKind | null): string {
   if (!skill) {
     return SKILL_EMOJI.other;
@@ -117,7 +137,7 @@ export function zoneEmoji(zoneId: string | null): string {
 
 export function zoneLabel(zoneId: string | null): string {
   if (!zoneId) {
-    return "전체";
+    return "미지정";
   }
   return ZONE_LABELS[zoneId] ?? zoneId;
 }

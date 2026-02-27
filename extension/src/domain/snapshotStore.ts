@@ -19,6 +19,7 @@ const GROWTH_EVENT_TYPES = new Set<RawRuntimeEvent["type"]>(["tool_start", "tool
 const MAX_PENDING_TOOL_STARTS = 256;
 const GROWTH_LEVEL_SPAN = 35;
 const STALE_AGENT_RETENTION_MS = 3 * 60 * 1000;
+const COMPLETED_AGENT_IDLE_MS = 30 * 1000;
 
 type WaitKind = "permission" | "turn";
 
@@ -175,7 +176,9 @@ export class SnapshotStore {
   }
 
   applyRawEvent(raw: RawRuntimeEvent): SnapshotUpdate {
-    this.pruneStaleAgents(raw.ts);
+    const eventTs = Number.isFinite(raw.ts) ? raw.ts : Date.now();
+    this.refreshCompletedStates(eventTs);
+    this.pruneStaleAgents(eventTs);
     const existing = this.agents.get(raw.agentRuntimeId);
 
     const team = this.teamResolver.resolveTeam(raw.agentRuntimeId, raw.filePath);
@@ -187,7 +190,7 @@ export class SnapshotStore {
     const currentSkill: SkillKind | null = nextSkill ?? existing?.currentSkill ?? null;
     const runtimeRole = deriveRuntimeRole(raw, existing?.runtimeRole);
     const currentHookGate = nextGate ?? existing?.currentHookGate ?? null;
-    const currentState = nextState ?? existing?.state ?? "waiting";
+    const currentState = nextState ?? (existing?.state === "completed" ? "waiting" : existing?.state ?? "waiting");
     const branchName = raw.branchName ?? existing?.branchName ?? null;
     const isMainBranch = raw.isMainBranch ?? existing?.isMainBranch ?? false;
     const mainBranchRisk = raw.mainBranchRisk ?? existing?.mainBranchRisk ?? false;
@@ -323,7 +326,7 @@ export class SnapshotStore {
       growthLevel,
       growthLevelUsage,
       growthStage,
-      lastEventTs: raw.ts
+      lastEventTs: eventTs
     };
 
     this.agents.set(raw.agentRuntimeId, agent);
@@ -380,7 +383,9 @@ export class SnapshotStore {
   }
 
   getWorldInit(): { agents: AgentSnapshot[]; zones: ZoneSnapshot[]; skills: SkillMetricSnapshot[] } {
-    this.pruneStaleAgents(this.resolvePruneNowTs());
+    const nowTs = this.resolvePruneNowTs();
+    this.refreshCompletedStates(nowTs);
+    this.pruneStaleAgents(nowTs);
     const agents = [...this.agents.values()].sort((a, b) => a.agentId.localeCompare(b.agentId));
     const skills: SkillMetricSnapshot[] = SKILL_ORDER.map((skill): SkillMetricSnapshot => {
       const existing = this.skillMetrics.get(skill);
@@ -498,6 +503,36 @@ export class SnapshotStore {
 
     if (this.filterState.selectedAgentId && !this.agents.has(this.filterState.selectedAgentId)) {
       this.filterState.selectedAgentId = null;
+    }
+  }
+
+  private refreshCompletedStates(nowTs: number): void {
+    const safeNow = Number.isFinite(nowTs) ? nowTs : Date.now();
+    for (const [agentId, snapshot] of this.agents.entries()) {
+      if (snapshot.state === "active") {
+        continue;
+      }
+
+      const hasPendingWait = this.pendingWaitByAgent.has(agentId);
+      const pendingTools = this.pendingToolStartsByAgent.get(agentId);
+      const hasPendingTool = !!pendingTools && pendingTools.length > 0;
+      const idleMs = safeNow - snapshot.lastEventTs;
+      const shouldBeCompleted = idleMs >= COMPLETED_AGENT_IDLE_MS && !hasPendingWait && !hasPendingTool;
+
+      if (shouldBeCompleted && snapshot.state !== "completed") {
+        this.agents.set(agentId, {
+          ...snapshot,
+          state: "completed"
+        });
+        continue;
+      }
+
+      if (!shouldBeCompleted && snapshot.state === "completed") {
+        this.agents.set(agentId, {
+          ...snapshot,
+          state: "waiting"
+        });
+      }
     }
   }
 

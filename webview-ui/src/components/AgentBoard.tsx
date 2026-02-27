@@ -2,20 +2,14 @@ import React, { useMemo, useState } from "react";
 import type { WebviewAssetCatalog } from "@shared/assets";
 import type { AgentMdCatalogItem, AgentSnapshot, FilterState, SkillMdCatalogItem } from "@shared/domain";
 import {
-  gateEmoji,
-  gateIconKey,
+  agentAvatarEmoji,
   growthEmoji,
   iconUrl,
-  skillEmoji,
-  skillIconKey,
   teamEmoji,
-  teamIconKey,
-  zoneEmoji,
-  zoneIconKey,
-  zoneLabel
+  teamIconKey
 } from "../world/iconKeys";
 import IconToken from "./IconToken";
-import { gateStatusLabel, growthLabel, skillLabel } from "./SkillFlowPanel";
+import { growthLabel } from "./SkillFlowPanel";
 
 interface AgentBoardProps {
   agents: AgentSnapshot[];
@@ -27,10 +21,6 @@ interface AgentBoardProps {
 }
 
 type AgentBoardTab = "active" | "agents" | "skills";
-
-function stateClass(state: AgentSnapshot["state"]): string {
-  return state === "active" ? "state-active" : "state-waiting";
-}
 
 function runtimeRoleLabel(role: AgentSnapshot["runtimeRole"]): string {
   switch (role) {
@@ -54,17 +44,15 @@ function runtimeRoleEmoji(role: AgentSnapshot["runtimeRole"]): string {
   }
 }
 
-function matchesAgent(agent: AgentSnapshot, filter: FilterState): boolean {
-  if (filter.selectedAgentId && agent.agentId !== filter.selectedAgentId) {
-    return false;
+function agentStateLabel(state: AgentSnapshot["state"]): string {
+  switch (state) {
+    case "active":
+      return "활동";
+    case "completed":
+      return "완료";
+    default:
+      return "대기";
   }
-  if (filter.selectedSkill && agent.currentSkill !== filter.selectedSkill) {
-    return false;
-  }
-  if (filter.selectedZoneId && agent.currentZoneId !== filter.selectedZoneId) {
-    return false;
-  }
-  return true;
 }
 
 export default function AgentBoard({
@@ -93,7 +81,6 @@ export default function AgentBoard({
   }, [agents, agentMds]);
 
   const topSkills = useMemo(() => {
-    const ranking = [...(filter.selectedAgentId ? [] : [])]; // To avoid unused var if needed
     // Sort skills by total usage across all metrics
     const sorted = [...skillMds]
       .map(md => {
@@ -105,8 +92,6 @@ export default function AgentBoard({
       .slice(0, 3);
     return sorted;
   }, [agents, skillMds]);
-
-  const hasFilter = !!(filter.selectedAgentId || filter.selectedSkill || filter.selectedZoneId);
 
   return (
     <div className="panel-body agent-board">
@@ -134,74 +119,60 @@ export default function AgentBoard({
       <div className="agent-board-content">
         {activeTab === "active" && (
           <div className="agent-cards-grid">
-            {agents.length === 0 && <div className="empty-hint">등록된 에이전트가 없습니다</div>}
+            {agents.length === 0 && <div className="empty-hint">실시간 에이전트 이벤트 대기 중</div>}
             {agents.map((agent) => {
               const selected = filter.selectedAgentId === agent.agentId;
               const matchesFilter = !filter.selectedAgentId || filter.selectedAgentId === agent.agentId;
               if (!matchesFilter) return null;
 
               const teamIcon = iconUrl(assets, teamIconKey(agent));
-              const skillIcon = iconUrl(assets, skillIconKey(agent.currentSkill));
-              const gateIcon = iconUrl(assets, gateIconKey(agent.currentHookGate));
-              const zoneIcon = iconUrl(assets, zoneIconKey(agent.currentZoneId));
-              const agentMdEntries = Object.entries(agent.agentMdCallsById).sort((a, b) => b[1] - a[1]);
-              
               return (
                 <div 
                   key={agent.agentId} 
                   className={`agent-card ${agent.state} ${selected ? "selected" : ""} growth-${agent.growthStage} ${agent.mainBranchRisk ? "branch-risk" : ""}`}
                   onClick={() => onSelectAgent(selected ? null : agent.agentId)}
-                  title={`Agent: ${agent.agentId}\nRole: ${runtimeRoleLabel(agent.runtimeRole)}\nTarget: ${agent.branchName}\nMDs: ${agent.agentMdCallsTotal}`}
+                  title={`Agent: ${agent.agentId}\n상태: ${agentStateLabel(agent.state)}\nRole: ${runtimeRoleLabel(agent.runtimeRole)}\nTarget: ${agent.branchName}\nMDs: ${agent.agentMdCallsTotal}`}
                 >
+                  <div className="agent-card-top">
+                    <div className="agent-level-badge" title={`레벨: ${agent.growthLevel}`}>
+                      <span className="agent-level-text">LV {agent.growthLevel}</span>
+                    </div>
 
-
-                  <div className={`agent-role-badge role-${agent.runtimeRole}`} title={`역할: ${runtimeRoleLabel(agent.runtimeRole)}`}>
-                    <span>{runtimeRoleEmoji(agent.runtimeRole)}</span>
-                    <span>{runtimeRoleLabel(agent.runtimeRole)}</span>
+                    <div className="agent-card-top-right">
+                      <div className={`agent-role-badge role-${agent.runtimeRole}`} title={`역할: ${runtimeRoleLabel(agent.runtimeRole)}`}>
+                        <span>{runtimeRoleEmoji(agent.runtimeRole)}</span>
+                        <span>{runtimeRoleLabel(agent.runtimeRole)}</span>
+                      </div>
+                      {agent.state === "active" && <div className="state-ring state-active" />}
+                    </div>
                   </div>
-                  
-                  {agent.state === "active" && <div className="state-ring state-active" />}
+
+                  {agent.state === "completed" && (
+                    <div className="agent-complete-badge" title="완료된 세션">
+                      완료
+                    </div>
+                  )}
                   
                   <IconToken 
                     src={teamIcon} 
-                    fallback={teamEmoji(agent)} 
+                    fallback={agentAvatarEmoji(agent) || teamEmoji(agent)}
                     title={`에이전트 ID: ${agent.agentId}\n목표 브랜치: ${agent.branchName}`} 
                     className="agent-main-icon" 
                   />
-                  
-                  <div className="agent-meta-icons">
-                    <IconToken 
-                      src={skillIcon} 
-                      fallback={skillEmoji(agent.currentSkill)} 
-                      title={`현재 스킬: ${skillLabel(agent.currentSkill)}`} 
-                      className="icon-token mini-icon" 
-                    />
-                    <IconToken 
-                      src={gateIcon} 
-                      fallback={gateEmoji(agent.currentHookGate)} 
-                      title={`승인 상태: ${gateStatusLabel(agent.currentHookGate)}`} 
-                      className="icon-token mini-icon" 
-                    />
-                    <IconToken 
-                      src={zoneIcon} 
-                      fallback={zoneEmoji(agent.currentZoneId)} 
-                      title={`현재 구역: ${zoneLabel(agent.currentZoneId)}`} 
-                      className="icon-token mini-icon" 
-                    />
-                  </div>
 
-                  <div className="agent-level-badge" title={`레벨: ${agent.growthLevel}\n성장 단계: ${growthLabel(agent.growthStage)}\n진행도: ${agent.growthLevelUsage}/35`}>
-                    <span className="agent-level-text">Lv.{agent.growthLevel}</span>
-                    <span className="agent-level-stage">{growthEmoji(agent.growthStage)} {agent.growthLevelUsage}/35</span>
-                  </div>
-
-                  {(agent.totalTokensTotal ?? 0) > 0 && (
-                    <div className="agent-token-badge" title={`사료 소비: ${(agent.totalTokensTotal ?? 0).toLocaleString()} 토큰`}>
-                      🌾 {(agent.totalTokensTotal ?? 0) >= 1000
-                        ? `${((agent.totalTokensTotal ?? 0) / 1000).toFixed(1)}K`
-                        : agent.totalTokensTotal}
+                  <div className="agent-card-bottom">
+                    <div className="agent-xp-badge" title={`경험치 진행도: ${agent.growthLevelUsage}/35\n성장 단계: ${growthLabel(agent.growthStage)}`}>
+                      <span className="agent-xp-text">{growthEmoji(agent.growthStage)} XP {agent.growthLevelUsage}/35</span>
                     </div>
-                  )}
+
+                    {(agent.totalTokensTotal ?? 0) > 0 && (
+                      <div className="agent-token-badge" title={`사료 소비: ${(agent.totalTokensTotal ?? 0).toLocaleString()} 토큰`}>
+                        🌾 {(agent.totalTokensTotal ?? 0) >= 1000
+                          ? `${((agent.totalTokensTotal ?? 0) / 1000).toFixed(1)}K`
+                          : agent.totalTokensTotal}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}

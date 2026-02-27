@@ -102,6 +102,56 @@ describe("SnapshotStore", () => {
     expect(agentIds).not.toContain("old-agent");
   });
 
+  it("marks idle waiting agents as completed and resumes on next event", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-completed-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    let update = store.applyRawEvent(makeEvent("tool_done", { ts: 1_000, agentRuntimeId: "worker-a" }));
+    expect(update.agent.state).toBe("waiting");
+
+    store.applyRawEvent(makeEvent("assistant_text", { ts: 32_000, agentRuntimeId: "worker-b" }));
+    const afterIdle = store.getWorldInit().agents.find((agent) => agent.agentId === "worker-a");
+    expect(afterIdle?.state).toBe("completed");
+
+    update = store.applyRawEvent(makeEvent("tool_start", { ts: 33_000, agentRuntimeId: "worker-a" }));
+    expect(update.agent.state).toBe("active");
+  });
+
+  it("does not mark agent as completed while a wait session is still pending", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-completed-pending-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(makeEvent("permission_wait", { ts: 1_000, agentRuntimeId: "worker-a" }));
+    store.applyRawEvent(makeEvent("assistant_text", { ts: 32_000, agentRuntimeId: "worker-b" }));
+
+    const workerA = store.getWorldInit().agents.find((agent) => agent.agentId === "worker-a");
+    expect(workerA?.state).toBe("waiting");
+  });
+
   it("measures wait durations for permission and turn waits", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-wait-ms-"));
     const configPath = path.join(tempDir, ".agent-teams.json");
