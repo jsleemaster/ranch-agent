@@ -77,6 +77,31 @@ describe("SnapshotStore", () => {
     expect(update.agent.runtimeRole).toBe("subagent");
   });
 
+  it("prunes stale runtime agents after retention window", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-prune-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(makeEvent("tool_start", { ts: 1_000, agentRuntimeId: "old-agent" }));
+    store.applyRawEvent(makeEvent("tool_start", { ts: 182_000, agentRuntimeId: "new-agent" }));
+
+    const world = store.getWorldInit();
+    const agentIds = world.agents.map((agent) => agent.agentId);
+    expect(agentIds).toContain("new-agent");
+    expect(agentIds).not.toContain("old-agent");
+  });
+
   it("measures wait durations for permission and turn waits", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-wait-ms-"));
     const configPath = path.join(tempDir, ".agent-teams.json");

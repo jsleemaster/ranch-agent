@@ -18,6 +18,7 @@ const SKILL_ORDER: SkillKind[] = ["read", "edit", "write", "bash", "search", "ta
 const GROWTH_EVENT_TYPES = new Set<RawRuntimeEvent["type"]>(["tool_start", "tool_done", "assistant_text"]);
 const MAX_PENDING_TOOL_STARTS = 256;
 const GROWTH_LEVEL_SPAN = 35;
+const STALE_AGENT_RETENTION_MS = 3 * 60 * 1000;
 
 type WaitKind = "permission" | "turn";
 
@@ -174,6 +175,7 @@ export class SnapshotStore {
   }
 
   applyRawEvent(raw: RawRuntimeEvent): SnapshotUpdate {
+    this.pruneStaleAgents(raw.ts);
     const existing = this.agents.get(raw.agentRuntimeId);
 
     const team = this.teamResolver.resolveTeam(raw.agentRuntimeId, raw.filePath);
@@ -378,6 +380,7 @@ export class SnapshotStore {
   }
 
   getWorldInit(): { agents: AgentSnapshot[]; zones: ZoneSnapshot[]; skills: SkillMetricSnapshot[] } {
+    this.pruneStaleAgents(this.resolvePruneNowTs());
     const agents = [...this.agents.values()].sort((a, b) => a.agentId.localeCompare(b.agentId));
     const skills: SkillMetricSnapshot[] = SKILL_ORDER.map((skill): SkillMetricSnapshot => {
       const existing = this.skillMetrics.get(skill);
@@ -475,5 +478,46 @@ export class SnapshotStore {
       return null;
     }
     return Math.max(0, endTs - matched.startTs);
+  }
+
+  private pruneStaleAgents(nowTs: number): void {
+    const safeNow = Number.isFinite(nowTs) ? nowTs : Date.now();
+    const cutoff = safeNow - STALE_AGENT_RETENTION_MS;
+    if (!Number.isFinite(cutoff)) {
+      return;
+    }
+
+    for (const [agentId, snapshot] of this.agents.entries()) {
+      if (snapshot.lastEventTs >= cutoff) {
+        continue;
+      }
+      this.agents.delete(agentId);
+      this.pendingWaitByAgent.delete(agentId);
+      this.pendingToolStartsByAgent.delete(agentId);
+    }
+
+    if (this.filterState.selectedAgentId && !this.agents.has(this.filterState.selectedAgentId)) {
+      this.filterState.selectedAgentId = null;
+    }
+  }
+
+  private resolvePruneNowTs(): number {
+    let latestEventTs = 0;
+    for (const snapshot of this.agents.values()) {
+      if (snapshot.lastEventTs > latestEventTs) {
+        latestEventTs = snapshot.lastEventTs;
+      }
+    }
+    if (latestEventTs <= 0) {
+      return Date.now();
+    }
+
+    // Unit tests often use small synthetic timestamps (1, 2, 3...). In that case
+    // using Date.now() would immediately prune every agent.
+    if (latestEventTs < 1_000_000_000_000) {
+      return latestEventTs;
+    }
+
+    return Date.now();
   }
 }

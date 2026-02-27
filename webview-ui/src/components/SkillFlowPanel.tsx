@@ -240,12 +240,12 @@ export default function SkillFlowPanel({
 
             {/* Stats */}
             <div className="pipeline-stats">
-              <span className="pipeline-stat" title="에이전트 로직 호출 횟수">
-                <span className="pipeline-stat-icon">🧠</span>
+              <span className="pipeline-stat" title="AGENT.md 호출 횟수">
+                <span className="pipeline-stat-icon">📄</span>
                 <span className="pipeline-stat-val">{agent.agentMdCallsTotal}</span>
               </span>
-              <span className="pipeline-stat" title="총 작업 수행 횟수">
-                <span className="pipeline-stat-icon">⚔️</span>
+              <span className="pipeline-stat" title="작업 이벤트 누적 횟수">
+                <span className="pipeline-stat-icon">🔁</span>
                 <span className="pipeline-stat-val">{agent.usageCount}</span>
               </span>
             </div>
