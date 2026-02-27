@@ -63,7 +63,7 @@ export function buildWebviewHtml(options: {
     "default-src 'none'",
     `img-src ${webview.cspSource} data: https:`,
     `style-src ${webview.cspSource} 'unsafe-inline'`,
-    `script-src 'nonce-${scriptNonce}'`,
+    `script-src ${webview.cspSource} 'nonce-${scriptNonce}'`,
     `font-src ${webview.cspSource}`
   ].join("; ");
 

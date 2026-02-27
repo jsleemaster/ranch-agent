@@ -134,9 +134,24 @@ export default function LiveFeedPanel({
             <span className="feed-time">{formatTime(event.ts)}</span>
             <span className="feed-agent">{shortAgentId(event.agentId)}</span>
             <span className="feed-code">{code}</span>
-            <IconToken src={skillIcon} fallback={skillEmoji(event.skill)} title={`skill: ${event.skill ?? "none"}`} className="mini-icon" />
-            <IconToken src={gateIcon} fallback={gateEmoji(event.hookGate)} title={`gate: ${event.hookGate ?? "none"}`} className="mini-icon" />
-            <IconToken src={zoneIcon} fallback={zoneEmoji(event.zoneId)} title={`zone: ${zoneLabel(event.zoneId)}`} className="mini-icon" />
+            <IconToken 
+              src={skillIcon} 
+              fallback={skillEmoji(event.skill)} 
+              title={`skill: ${event.skill ?? "none"}`} 
+              className="mini-icon" 
+            />
+            <IconToken 
+              src={gateIcon} 
+              fallback={gateEmoji(event.hookGate)} 
+              title={`gate: ${event.hookGate ?? "none"}`} 
+              className="mini-icon" 
+            />
+            <IconToken 
+              src={zoneIcon} 
+              fallback={zoneEmoji(event.zoneId)} 
+              title={`zone: ${zoneLabel(event.zoneId)}`} 
+              className="mini-icon" 
+            />
             <span className={`feed-growth growth-${stage}`}>{growthEmoji(stage)}</span>
             <span className="feed-detail">{detail || "세부 없음"}</span>
           </button>

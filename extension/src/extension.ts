@@ -3,7 +3,6 @@ import * as vscode from "vscode";
 
 import type { ExtToWebviewAtomicMessage, ExtToWebviewMessage } from "../../shared/protocol";
 import { AUTO_RUNTIME_SCAN_MS, CONFIG_SECTION, MESSAGE_FLUSH_MS, MESSAGE_QUEUE_LIMIT, VIEW_TYPE } from "./constants";
-import { FolderMapper } from "./domain/folderMapper";
 import { SnapshotStore } from "./domain/snapshotStore";
 import { TeamResolver } from "./domain/teamResolver";
 import { AgentMdResolver } from "./agentMdResolver";
@@ -21,7 +20,6 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private readonly paths: ReturnType<typeof resolveProjectPaths>;
 
   private readonly teamResolver: TeamResolver;
-  private readonly folderMapper: FolderMapper;
   private readonly store: SnapshotStore;
   private readonly agentMdResolver: AgentMdResolver;
   private readonly skillMdResolver: SkillMdResolver;
@@ -44,10 +42,8 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     this.paths = resolveProjectPaths(context);
 
     this.teamResolver = new TeamResolver(this.paths.teamConfigPath);
-    this.folderMapper = new FolderMapper(this.paths.workspaceRoot);
     this.store = new SnapshotStore({
-      teamResolver: this.teamResolver,
-      folderMapper: this.folderMapper
+      teamResolver: this.teamResolver
     });
     this.agentMdResolver = new AgentMdResolver(this.paths.workspaceRoot);
     this.skillMdResolver = new SkillMdResolver(this.paths.workspaceRoot);
@@ -62,9 +58,6 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
         this.enqueueMessage({ type: "agent_upsert", agent: update.agent });
         for (const metric of update.skillMetrics) {
           this.enqueueMessage({ type: "skill_metric_upsert", metric });
-        }
-        for (const zone of update.zones) {
-          this.enqueueMessage({ type: "zone_upsert", zone });
         }
         this.enqueueMessage({ type: "feed_append", event: update.feed });
       },
@@ -188,7 +181,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
             this.sendFilterState();
             return;
           case "select_zone":
-            this.store.setFilterState({ selectedZoneId: message.zoneId });
+            this.store.setFilterState({ selectedZoneId: null });
             this.sendFilterState();
             return;
           default:
@@ -319,11 +312,6 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     } else if (message.type === "skill_metric_upsert") {
       replaced = this.replaceQueuedMessage(
         (queued) => queued.type === "skill_metric_upsert" && queued.metric.skill === message.metric.skill,
-        message
-      );
-    } else if (message.type === "zone_upsert") {
-      replaced = this.replaceQueuedMessage(
-        (queued) => queued.type === "zone_upsert" && queued.zone.zoneId === message.zone.zoneId,
         message
       );
     } else if (message.type === "filter_state") {

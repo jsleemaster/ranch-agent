@@ -76,8 +76,8 @@ export function resolveProjectPaths(context: vscode.ExtensionContext): ProjectPa
     ),
     userPackDir: firstExistingDir([workspaceUserPackDir, extensionUserPackDir, extensionParentUserPackDir], workspaceUserPackDir),
     webviewDistDir: firstExistingDir(
-      [workspaceWebviewDistDir, extensionWebviewDistDir, extensionParentWebviewDistDir],
-      workspaceWebviewDistDir
+      [extensionWebviewDistDir, extensionParentWebviewDistDir, workspaceWebviewDistDir],
+      extensionWebviewDistDir
     )
   };
 }

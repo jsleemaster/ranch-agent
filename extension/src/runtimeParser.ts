@@ -513,7 +513,11 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
   const status = pickString(obj, ["status", "state", "result.status", "payload.status"])?.toLowerCase();
   const explicitError = pickBoolean(obj, ["isError", "is_error", "error", "result.error"]);
   const hasErrorObject = asObject(readPath(obj, "error")) !== null;
-  const inferredError = hasErrorObject || status === "error" || status === "failed" || contentSignals.toolResult?.isError === true;
+  const statusIndicatesError = status === "error" || status === "failed";
+  // Guard against false positives from non-tool assistant/thinking payloads that can carry "status".
+  const inferredError =
+    contentSignals.toolResult?.isError === true ||
+    (eventType === "tool_done" && (hasErrorObject || statusIndicatesError));
   const isError = explicitError ?? inferredError;
   const detail = inferDetail(obj, contentSignals);
   const invokedAgentHint = inferInvokedAgentHint(obj, contentSignals);

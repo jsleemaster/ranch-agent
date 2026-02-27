@@ -46,6 +46,20 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed?.isError).toBe(true);
   });
 
+  it("does not infer error from failed status on assistant text", () => {
+    const line = JSON.stringify({
+      type: "assistant_text",
+      agentId: "gamma",
+      status: "failed",
+      message: "thinking..."
+    });
+
+    const parsed = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: "fallback" });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.type).toBe("assistant_text");
+    expect(parsed?.isError).toBe(false);
+  });
+
   it("parses claude content tool_use with subagent_type", () => {
     const line = JSON.stringify({
       type: "assistant",

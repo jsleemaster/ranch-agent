@@ -11,7 +11,7 @@ export function deriveHookGateState(event: RawRuntimeEvent): HookGateState | nul
   if (event.type === "tool_done") {
     return "closed";
   }
-  if (event.type === "tool_start" || event.type === "turn_active") {
+  if (event.type === "tool_start" || event.type === "turn_active" || event.type === "assistant_text") {
     return "open";
   }
   if (event.type === "turn_waiting") {

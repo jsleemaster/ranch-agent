@@ -29,6 +29,7 @@ describe("deriveHookGateState", () => {
   it("maps start/active to open", () => {
     expect(deriveHookGateState(event("tool_start"))).toBe("open");
     expect(deriveHookGateState(event("turn_active"))).toBe("open");
+    expect(deriveHookGateState(event("assistant_text"))).toBe("open");
   });
 
   it("maps waiting to closed", () => {
