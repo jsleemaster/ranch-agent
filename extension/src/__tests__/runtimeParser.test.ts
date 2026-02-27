@@ -127,4 +127,25 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed?.completionTokens).toBe(233);
     expect(parsed?.totalTokens).toBe(1434);
   });
+
+  it("derives total tokens when only prompt/completion are present", () => {
+    const line = JSON.stringify({
+      type: "assistant_text",
+      agentId: "epsilon",
+      usage: {
+        prompt_tokens: 77,
+        completion_tokens: 19
+      },
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }]
+      }
+    });
+
+    const parsed = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: "fallback" });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.promptTokens).toBe(77);
+    expect(parsed?.completionTokens).toBe(19);
+    expect(parsed?.totalTokens).toBe(96);
+  });
 });

@@ -46,6 +46,43 @@ describe("SnapshotStore", () => {
     expect(done.agent.currentHookGate).toBe("closed");
   });
 
+  it("measures wait durations for permission and turn waits", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-wait-ms-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(makeEvent("permission_wait", { ts: 1_000 }));
+    let resumed = store.applyRawEvent(makeEvent("tool_start", { ts: 1_800 }));
+    expect(resumed.feed.waitDurationMs).toBe(800);
+    expect(resumed.feed.waitKind).toBe("permission");
+    expect(resumed.agent.waitTotalMs).toBe(800);
+    expect(resumed.agent.waitCount).toBe(1);
+    expect(resumed.agent.permissionWaitTotalMs).toBe(800);
+    expect(resumed.agent.permissionWaitCount).toBe(1);
+    expect(resumed.agent.waitAvgMs).toBe(800);
+
+    store.applyRawEvent(makeEvent("turn_waiting", { ts: 2_000 }));
+    resumed = store.applyRawEvent(makeEvent("turn_active", { ts: 3_000 }));
+    expect(resumed.feed.waitDurationMs).toBe(1000);
+    expect(resumed.feed.waitKind).toBe("turn");
+    expect(resumed.agent.waitTotalMs).toBe(1800);
+    expect(resumed.agent.waitCount).toBe(2);
+    expect(resumed.agent.turnWaitTotalMs).toBe(1000);
+    expect(resumed.agent.turnWaitCount).toBe(1);
+    expect(resumed.agent.waitAvgMs).toBe(900);
+  });
+
   it("derives growth stage from usage thresholds", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-growth-"));
     const configPath = path.join(tempDir, ".agent-teams.json");
@@ -120,6 +157,38 @@ describe("SnapshotStore", () => {
     const bashMetric = world.skills.find((metric) => metric.skill === "bash");
     expect(world.skills).toHaveLength(8);
     expect(bashMetric).toEqual({ skill: "bash", usageCount: 5, growthStage: "sprout" });
+  });
+
+  it("measures tool run duration from start to done", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-tool-run-ms-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(makeEvent("tool_start", { ts: 100, toolId: "tool-1", toolName: "Bash" }));
+    let done = store.applyRawEvent(makeEvent("tool_done", { ts: 350, toolId: "tool-1", toolName: "Bash" }));
+    expect(done.feed.toolRunDurationMs).toBe(250);
+    expect(done.agent.toolRunTotalMs).toBe(250);
+    expect(done.agent.toolRunCount).toBe(1);
+    expect(done.agent.toolRunAvgMs).toBe(250);
+    expect(done.agent.lastToolRunMs).toBe(250);
+
+    store.applyRawEvent(makeEvent("tool_start", { ts: 500, toolName: "Read" }));
+    done = store.applyRawEvent(makeEvent("tool_done", { ts: 900, toolName: "Read" }));
+    expect(done.feed.toolRunDurationMs).toBe(400);
+    expect(done.agent.toolRunTotalMs).toBe(650);
+    expect(done.agent.toolRunCount).toBe(2);
+    expect(done.agent.toolRunAvgMs).toBe(325);
   });
 
   it("tracks invoked agent-md call counts per runtime agent", () => {

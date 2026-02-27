@@ -40,6 +40,7 @@ Emoji-first VS Code extension for visualizing multi-agent runtime activity as a 
 - `shared/`: runtime/domain/protocol shared types
 - `assets/`: placeholder/user asset packs
 - `config/.agent-teams.json`: 팀/아이콘/색상 매핑 규칙
+- `docs/RUNTIME_TIMING_METRICS.md`: 대기시간/작업완료시간 집계 로직 문서
 
 ## Prerequisites
 

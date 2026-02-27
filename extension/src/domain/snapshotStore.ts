@@ -15,6 +15,20 @@ import type { TeamResolver } from "./teamResolver";
 
 const SKILL_ORDER: SkillKind[] = ["read", "edit", "write", "bash", "search", "task", "ask", "other"];
 const GROWTH_EVENT_TYPES = new Set<RawRuntimeEvent["type"]>(["tool_start", "tool_done", "assistant_text"]);
+const MAX_PENDING_TOOL_STARTS = 256;
+
+type WaitKind = "permission" | "turn";
+
+interface PendingWaitState {
+  startTs: number;
+  kind: WaitKind;
+}
+
+interface PendingToolStartState {
+  startTs: number;
+  toolId: string | null;
+  toolName: string | null;
+}
 
 function growthStageForUsage(usageCount: number): GrowthStage {
   if (usageCount >= 35) {
@@ -37,6 +51,14 @@ function normalizeTokenCount(raw: number | undefined): number {
   return floored > 0 ? floored : 0;
 }
 
+function normalizeToolKey(raw: string | undefined): string | null {
+  if (!raw) {
+    return null;
+  }
+  const normalized = raw.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
 interface SnapshotDependencies {
   teamResolver: TeamResolver;
 }
@@ -54,6 +76,11 @@ export class SnapshotStore {
   private readonly agents = new Map<string, AgentSnapshot>();
   private readonly skillMetrics = new Map<SkillKind, SkillMetricSnapshot>();
   private readonly feed: FeedEvent[] = [];
+  // Timing state machine:
+  // - pendingWaitByAgent tracks when an agent entered waiting state.
+  // - pendingToolStartsByAgent tracks in-flight tool starts to measure tool_done latency.
+  private readonly pendingWaitByAgent = new Map<string, PendingWaitState>();
+  private readonly pendingToolStartsByAgent = new Map<string, PendingToolStartState[]>();
 
   private sequence = 0;
 
@@ -116,6 +143,58 @@ export class SnapshotStore {
     const completionTokensTotal = (existing?.completionTokensTotal ?? 0) + eventCompletionTokens;
     const totalTokensTotal = (existing?.totalTokensTotal ?? 0) + eventTotalTokens;
 
+    let waitTotalMs = existing?.waitTotalMs ?? 0;
+    let waitCount = existing?.waitCount ?? 0;
+    let permissionWaitTotalMs = existing?.permissionWaitTotalMs ?? 0;
+    let permissionWaitCount = existing?.permissionWaitCount ?? 0;
+    let turnWaitTotalMs = existing?.turnWaitTotalMs ?? 0;
+    let turnWaitCount = existing?.turnWaitCount ?? 0;
+    let lastWaitMs = existing?.lastWaitMs ?? 0;
+
+    let toolRunTotalMs = existing?.toolRunTotalMs ?? 0;
+    let toolRunCount = existing?.toolRunCount ?? 0;
+    let lastToolRunMs = existing?.lastToolRunMs ?? 0;
+
+    let waitDurationMs: number | undefined;
+    let waitKind: WaitKind | undefined;
+    let toolRunDurationMs: number | undefined;
+
+    if (raw.type === "permission_wait") {
+      this.pendingWaitByAgent.set(raw.agentRuntimeId, { startTs: raw.ts, kind: "permission" });
+    }
+    if (raw.type === "turn_waiting") {
+      this.pendingWaitByAgent.set(raw.agentRuntimeId, { startTs: raw.ts, kind: "turn" });
+    }
+    if (raw.type === "tool_start" || raw.type === "turn_active") {
+      const consumedWait = this.consumePendingWait(raw.agentRuntimeId, raw.ts);
+      if (consumedWait) {
+        waitDurationMs = consumedWait.durationMs;
+        waitKind = consumedWait.kind;
+        waitTotalMs += consumedWait.durationMs;
+        waitCount += 1;
+        lastWaitMs = consumedWait.durationMs;
+        if (consumedWait.kind === "permission") {
+          permissionWaitTotalMs += consumedWait.durationMs;
+          permissionWaitCount += 1;
+        } else {
+          turnWaitTotalMs += consumedWait.durationMs;
+          turnWaitCount += 1;
+        }
+      }
+    }
+    if (raw.type === "tool_start") {
+      this.recordToolStart(raw.agentRuntimeId, raw.ts, raw.toolId, raw.toolName);
+    }
+    if (raw.type === "tool_done") {
+      const completedToolRunMs = this.consumeToolStart(raw.agentRuntimeId, raw.ts, raw.toolId, raw.toolName);
+      if (typeof completedToolRunMs === "number") {
+        toolRunDurationMs = completedToolRunMs;
+        toolRunTotalMs += completedToolRunMs;
+        toolRunCount += 1;
+        lastToolRunMs = completedToolRunMs;
+      }
+    }
+
     const shouldGrow = GROWTH_EVENT_TYPES.has(raw.type);
     const usageCount = (existing?.usageCount ?? 0) + (shouldGrow ? 1 : 0);
     const growthStage = growthStageForUsage(usageCount);
@@ -144,6 +223,18 @@ export class SnapshotStore {
       lastPromptTokens: eventPromptTokens,
       lastCompletionTokens: eventCompletionTokens,
       lastTotalTokens: eventTotalTokens,
+      waitTotalMs,
+      waitCount,
+      waitAvgMs: waitCount > 0 ? Math.round(waitTotalMs / waitCount) : 0,
+      lastWaitMs,
+      permissionWaitTotalMs,
+      permissionWaitCount,
+      turnWaitTotalMs,
+      turnWaitCount,
+      toolRunTotalMs,
+      toolRunCount,
+      toolRunAvgMs: toolRunCount > 0 ? Math.round(toolRunTotalMs / toolRunCount) : 0,
+      lastToolRunMs,
       usageCount,
       growthStage,
       lastEventTs: raw.ts
@@ -183,6 +274,9 @@ export class SnapshotStore {
       promptTokens: eventPromptTokens,
       completionTokens: eventCompletionTokens,
       totalTokens: eventTotalTokens,
+      waitDurationMs,
+      waitKind,
+      toolRunDurationMs,
       growthStage: growthStage,
       text: raw.detail
     };
@@ -232,5 +326,71 @@ export class SnapshotStore {
       selectedZoneId: null
     };
     return this.getFilterState();
+  }
+
+  private consumePendingWait(agentRuntimeId: string, endTs: number): { durationMs: number; kind: WaitKind } | null {
+    const waiting = this.pendingWaitByAgent.get(agentRuntimeId);
+    if (!waiting) {
+      return null;
+    }
+    this.pendingWaitByAgent.delete(agentRuntimeId);
+    const durationMs = Math.max(0, endTs - waiting.startTs);
+    return {
+      durationMs,
+      kind: waiting.kind
+    };
+  }
+
+  private recordToolStart(agentRuntimeId: string, startTs: number, rawToolId: string | undefined, rawToolName: string | undefined): void {
+    const toolId = normalizeToolKey(rawToolId);
+    const toolName = normalizeToolKey(rawToolName);
+    const queue = this.pendingToolStartsByAgent.get(agentRuntimeId) ?? [];
+    queue.push({
+      startTs,
+      toolId,
+      toolName
+    });
+    if (queue.length > MAX_PENDING_TOOL_STARTS) {
+      queue.splice(0, queue.length - MAX_PENDING_TOOL_STARTS);
+    }
+    this.pendingToolStartsByAgent.set(agentRuntimeId, queue);
+  }
+
+  private consumeToolStart(
+    agentRuntimeId: string,
+    endTs: number,
+    rawToolId: string | undefined,
+    rawToolName: string | undefined
+  ): number | null {
+    const queue = this.pendingToolStartsByAgent.get(agentRuntimeId);
+    if (!queue || queue.length === 0) {
+      return null;
+    }
+
+    const toolId = normalizeToolKey(rawToolId);
+    const toolName = normalizeToolKey(rawToolName);
+
+    let index = -1;
+    if (toolId) {
+      index = queue.findIndex((item) => item.toolId === toolId);
+    }
+    if (index < 0 && toolName) {
+      index = queue.findIndex((item) => item.toolName === toolName);
+    }
+    if (index < 0) {
+      index = 0;
+    }
+
+    const [matched] = queue.splice(index, 1);
+    if (queue.length === 0) {
+      this.pendingToolStartsByAgent.delete(agentRuntimeId);
+    } else {
+      this.pendingToolStartsByAgent.set(agentRuntimeId, queue);
+    }
+
+    if (!matched) {
+      return null;
+    }
+    return Math.max(0, endTs - matched.startTs);
   }
 }

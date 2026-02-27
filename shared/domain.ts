@@ -38,6 +38,18 @@ export interface AgentSnapshot {
   lastPromptTokens?: number;
   lastCompletionTokens?: number;
   lastTotalTokens?: number;
+  waitTotalMs?: number;
+  waitCount?: number;
+  waitAvgMs?: number;
+  lastWaitMs?: number;
+  permissionWaitTotalMs?: number;
+  permissionWaitCount?: number;
+  turnWaitTotalMs?: number;
+  turnWaitCount?: number;
+  toolRunTotalMs?: number;
+  toolRunCount?: number;
+  toolRunAvgMs?: number;
+  lastToolRunMs?: number;
   usageCount: number;
   growthStage: GrowthStage;
   lastEventTs: number;
@@ -63,6 +75,9 @@ export interface FeedEvent {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  waitDurationMs?: number;
+  waitKind?: "permission" | "turn";
+  toolRunDurationMs?: number;
   growthStage?: GrowthStage;
   text?: string;
 }
