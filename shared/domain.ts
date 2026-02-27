@@ -32,6 +32,12 @@ export interface AgentSnapshot {
   agentMdCallsById: Record<string, number>;
   skillMdCallsTotal: number;
   skillMdCallsById: Record<string, number>;
+  promptTokensTotal?: number;
+  completionTokensTotal?: number;
+  totalTokensTotal?: number;
+  lastPromptTokens?: number;
+  lastCompletionTokens?: number;
+  lastTotalTokens?: number;
   usageCount: number;
   growthStage: GrowthStage;
   lastEventTs: number;
@@ -54,6 +60,9 @@ export interface FeedEvent {
   mainBranchRisk?: boolean;
   invokedAgentMdId?: string | null;
   invokedSkillMdId?: string | null;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
   growthStage?: GrowthStage;
   text?: string;
 }

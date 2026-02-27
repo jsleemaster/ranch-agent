@@ -27,6 +27,12 @@ interface ContentSignals {
   textParts: string[];
 }
 
+interface TokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
 function asObject(value: unknown): JsonObject | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -402,6 +408,66 @@ function inferInvokedSkillHint(obj: JsonObject, contentSignals: ContentSignals):
   return matched[1];
 }
 
+function normalizeTokenCount(raw: number | undefined): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return undefined;
+  }
+  const floored = Math.floor(raw);
+  if (floored < 0) {
+    return undefined;
+  }
+  return floored;
+}
+
+function inferTokenUsage(obj: JsonObject): TokenUsage {
+  const promptTokens = normalizeTokenCount(
+    pickNumber(obj, [
+      "usage.input_tokens",
+      "usage.prompt_tokens",
+      "message.usage.input_tokens",
+      "message.usage.prompt_tokens",
+      "token_usage.input_tokens",
+      "token_usage.prompt_tokens",
+      "input_tokens",
+      "prompt_tokens"
+    ])
+  );
+
+  const completionTokens = normalizeTokenCount(
+    pickNumber(obj, [
+      "usage.output_tokens",
+      "usage.completion_tokens",
+      "message.usage.output_tokens",
+      "message.usage.completion_tokens",
+      "token_usage.output_tokens",
+      "token_usage.completion_tokens",
+      "output_tokens",
+      "completion_tokens"
+    ])
+  );
+
+  const explicitTotalTokens = normalizeTokenCount(
+    pickNumber(obj, [
+      "usage.total_tokens",
+      "message.usage.total_tokens",
+      "token_usage.total_tokens",
+      "total_tokens"
+    ])
+  );
+
+  const totalTokens =
+    explicitTotalTokens ??
+    (typeof promptTokens === "number" || typeof completionTokens === "number"
+      ? (promptTokens ?? 0) + (completionTokens ?? 0)
+      : undefined);
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens
+  };
+}
+
 export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRuntimeEvent | null {
   const trimmed = line.trim();
   if (trimmed.length === 0) {
@@ -452,6 +518,7 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
   const detail = inferDetail(obj, contentSignals);
   const invokedAgentHint = inferInvokedAgentHint(obj, contentSignals);
   const invokedSkillHint = inferInvokedSkillHint(obj, contentSignals);
+  const tokenUsage = inferTokenUsage(obj);
 
   return {
     runtime: options.runtime ?? "claude-jsonl",
@@ -465,6 +532,9 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
     branchName: inferBranchName(obj),
     invokedAgentHint,
     invokedSkillHint,
+    promptTokens: tokenUsage.promptTokens,
+    completionTokens: tokenUsage.completionTokens,
+    totalTokens: tokenUsage.totalTokens,
     detail,
     isError
   };

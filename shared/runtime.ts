@@ -24,6 +24,9 @@ export interface RawRuntimeEvent {
   invokedAgentMdId?: string | null;
   invokedSkillHint?: string | null;
   invokedSkillMdId?: string | null;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
   detail?: string;
   isError?: boolean;
 }

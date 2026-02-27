@@ -5,7 +5,6 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { RawRuntimeEvent } from "../../../shared/runtime";
-import { FolderMapper } from "../domain/folderMapper";
 import { SnapshotStore } from "../domain/snapshotStore";
 import { TeamResolver } from "../domain/teamResolver";
 
@@ -35,8 +34,7 @@ describe("SnapshotStore", () => {
     );
 
     const store = new SnapshotStore({
-      teamResolver: new TeamResolver(configPath),
-      folderMapper: new FolderMapper("/repo")
+      teamResolver: new TeamResolver(configPath)
     });
 
     const start = store.applyRawEvent(makeEvent("tool_start"));
@@ -61,8 +59,7 @@ describe("SnapshotStore", () => {
     );
 
     const store = new SnapshotStore({
-      teamResolver: new TeamResolver(configPath),
-      folderMapper: new FolderMapper("/repo")
+      teamResolver: new TeamResolver(configPath)
     });
 
     let update = store.applyRawEvent(makeEvent("tool_start", { ts: 1 }));
@@ -109,8 +106,7 @@ describe("SnapshotStore", () => {
     );
 
     const store = new SnapshotStore({
-      teamResolver: new TeamResolver(configPath),
-      folderMapper: new FolderMapper("/repo")
+      teamResolver: new TeamResolver(configPath)
     });
 
     const first = store.applyRawEvent(makeEvent("tool_start", { ts: 1, toolName: "Bash" }));
@@ -139,8 +135,7 @@ describe("SnapshotStore", () => {
     );
 
     const store = new SnapshotStore({
-      teamResolver: new TeamResolver(configPath),
-      folderMapper: new FolderMapper("/repo")
+      teamResolver: new TeamResolver(configPath)
     });
 
     let update = store.applyRawEvent(makeEvent("tool_start", { invokedAgentMdId: "reviewer", ts: 1 }));
@@ -170,8 +165,7 @@ describe("SnapshotStore", () => {
     );
 
     const store = new SnapshotStore({
-      teamResolver: new TeamResolver(configPath),
-      folderMapper: new FolderMapper("/repo")
+      teamResolver: new TeamResolver(configPath)
     });
 
     let update = store.applyRawEvent(makeEvent("tool_start", { invokedSkillMdId: "fix-pr", ts: 1 }));
@@ -186,5 +180,47 @@ describe("SnapshotStore", () => {
     update = store.applyRawEvent(makeEvent("tool_start", { invokedSkillMdId: "test-generator", ts: 3 }));
     expect(update.agent.skillMdCallsTotal).toBe(3);
     expect(update.agent.skillMdCallsById).toEqual({ "fix-pr": 2, "test-generator": 1 });
+  });
+
+  it("accumulates token usage per runtime agent", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-tokens-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    let update = store.applyRawEvent(
+      makeEvent("assistant_text", {
+        ts: 1,
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120
+      })
+    );
+    expect(update.agent.promptTokensTotal).toBe(100);
+    expect(update.agent.completionTokensTotal).toBe(20);
+    expect(update.agent.totalTokensTotal).toBe(120);
+    expect(update.feed.totalTokens).toBe(120);
+
+    update = store.applyRawEvent(
+      makeEvent("assistant_text", {
+        ts: 2,
+        promptTokens: 50,
+        completionTokens: 10
+      })
+    );
+    expect(update.agent.promptTokensTotal).toBe(150);
+    expect(update.agent.completionTokensTotal).toBe(30);
+    expect(update.agent.totalTokensTotal).toBe(180);
+    expect(update.agent.lastTotalTokens).toBe(60);
   });
 });

@@ -9,7 +9,6 @@ import type {
 } from "../../../shared/domain";
 import type { RawRuntimeEvent } from "../../../shared/runtime";
 import { FEED_LIMIT } from "../constants";
-import type { FolderMapper } from "./folderMapper";
 import { deriveAgentState, deriveHookGateState } from "./hookDeriver";
 import { normalizeSkill } from "./skillNormalizer";
 import type { TeamResolver } from "./teamResolver";
@@ -30,15 +29,16 @@ function growthStageForUsage(usageCount: number): GrowthStage {
   return "seed";
 }
 
-interface SnapshotDependencies {
-  teamResolver: TeamResolver;
-  folderMapper: FolderMapper;
+function normalizeTokenCount(raw: number | undefined): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return 0;
+  }
+  const floored = Math.floor(raw);
+  return floored > 0 ? floored : 0;
 }
 
-interface ZoneInternal {
-  zoneId: string;
-  folderPrefix: string;
-  occupants: Set<string>;
+interface SnapshotDependencies {
+  teamResolver: TeamResolver;
 }
 
 export interface SnapshotUpdate {
@@ -50,10 +50,8 @@ export interface SnapshotUpdate {
 
 export class SnapshotStore {
   private readonly teamResolver: TeamResolver;
-  private readonly folderMapper: FolderMapper;
 
   private readonly agents = new Map<string, AgentSnapshot>();
-  private readonly zones = new Map<string, ZoneInternal>();
   private readonly skillMetrics = new Map<SkillKind, SkillMetricSnapshot>();
   private readonly feed: FeedEvent[] = [];
 
@@ -67,15 +65,6 @@ export class SnapshotStore {
 
   constructor(deps: SnapshotDependencies) {
     this.teamResolver = deps.teamResolver;
-    this.folderMapper = deps.folderMapper;
-
-    for (const zoneId of this.folderMapper.getZoneOrder()) {
-      this.zones.set(zoneId, {
-        zoneId,
-        folderPrefix: zoneId,
-        occupants: new Set<string>()
-      });
-    }
 
     for (const skill of SKILL_ORDER) {
       this.skillMetrics.set(skill, {
@@ -93,9 +82,7 @@ export class SnapshotStore {
     const nextSkill = normalizeSkill(raw.toolName);
     const nextGate = deriveHookGateState(raw);
     const nextState = deriveAgentState(raw);
-
-    const zoneMatch = this.folderMapper.resolveZone(raw.filePath);
-    const nextZoneId = zoneMatch.zoneId ?? existing?.currentZoneId ?? null;
+    const nextZoneId = null;
 
     const currentSkill: SkillKind | null = nextSkill ?? existing?.currentSkill ?? null;
     const currentHookGate = nextGate ?? existing?.currentHookGate ?? null;
@@ -122,6 +109,13 @@ export class SnapshotStore {
     }
     const skillMdCallsTotal = (existing?.skillMdCallsTotal ?? 0) + skillMdIncrement;
 
+    const eventPromptTokens = normalizeTokenCount(raw.promptTokens);
+    const eventCompletionTokens = normalizeTokenCount(raw.completionTokens);
+    const eventTotalTokens = normalizeTokenCount(raw.totalTokens ?? eventPromptTokens + eventCompletionTokens);
+    const promptTokensTotal = (existing?.promptTokensTotal ?? 0) + eventPromptTokens;
+    const completionTokensTotal = (existing?.completionTokensTotal ?? 0) + eventCompletionTokens;
+    const totalTokensTotal = (existing?.totalTokensTotal ?? 0) + eventTotalTokens;
+
     const shouldGrow = GROWTH_EVENT_TYPES.has(raw.type);
     const usageCount = (existing?.usageCount ?? 0) + (shouldGrow ? 1 : 0);
     const growthStage = growthStageForUsage(usageCount);
@@ -144,25 +138,16 @@ export class SnapshotStore {
       agentMdCallsById: nextAgentMdCallsById,
       skillMdCallsTotal,
       skillMdCallsById: nextSkillMdCallsById,
+      promptTokensTotal,
+      completionTokensTotal,
+      totalTokensTotal,
+      lastPromptTokens: eventPromptTokens,
+      lastCompletionTokens: eventCompletionTokens,
+      lastTotalTokens: eventTotalTokens,
       usageCount,
       growthStage,
       lastEventTs: raw.ts
     };
-
-    const touchedZoneIds = new Set<string>();
-
-    const previousZoneId = existing?.currentZoneId ?? null;
-    if (previousZoneId && previousZoneId !== nextZoneId) {
-      const prevZone = this.ensureZone(previousZoneId, previousZoneId);
-      prevZone.occupants.delete(raw.agentRuntimeId);
-      touchedZoneIds.add(prevZone.zoneId);
-    }
-
-    if (nextZoneId) {
-      const zone = this.ensureZone(nextZoneId, zoneMatch.folderPrefix ?? nextZoneId);
-      zone.occupants.add(raw.agentRuntimeId);
-      touchedZoneIds.add(zone.zoneId);
-    }
 
     this.agents.set(raw.agentRuntimeId, agent);
 
@@ -195,6 +180,9 @@ export class SnapshotStore {
       mainBranchRisk,
       invokedAgentMdId: raw.invokedAgentMdId ?? null,
       invokedSkillMdId: raw.invokedSkillMdId ?? null,
+      promptTokens: eventPromptTokens,
+      completionTokens: eventCompletionTokens,
+      totalTokens: eventTotalTokens,
       growthStage: growthStage,
       text: raw.detail
     };
@@ -206,27 +194,13 @@ export class SnapshotStore {
 
     return {
       agent,
-      zones: [...touchedZoneIds].map((zoneId) => this.toZoneSnapshot(this.ensureZone(zoneId, zoneId))),
+      zones: [],
       skillMetrics: touchedSkillMetrics,
       feed
     };
   }
 
   getWorldInit(): { agents: AgentSnapshot[]; zones: ZoneSnapshot[]; skills: SkillMetricSnapshot[] } {
-    const zoneOrder = this.folderMapper.getZoneOrder();
-    const zoneRank = new Map(zoneOrder.map((zoneId, index) => [zoneId, index]));
-
-    const zones = [...this.zones.values()]
-      .sort((a, b) => {
-        const aRank = zoneRank.get(a.zoneId) ?? Number.MAX_SAFE_INTEGER;
-        const bRank = zoneRank.get(b.zoneId) ?? Number.MAX_SAFE_INTEGER;
-        if (aRank !== bRank) {
-          return aRank - bRank;
-        }
-        return a.zoneId.localeCompare(b.zoneId);
-      })
-      .map((zone) => this.toZoneSnapshot(zone));
-
     const agents = [...this.agents.values()].sort((a, b) => a.agentId.localeCompare(b.agentId));
     const skills: SkillMetricSnapshot[] = SKILL_ORDER.map((skill): SkillMetricSnapshot => {
       const existing = this.skillMetrics.get(skill);
@@ -240,7 +214,7 @@ export class SnapshotStore {
       };
     });
 
-    return { agents, zones, skills };
+    return { agents, zones: [], skills };
   }
 
   getFeed(): FeedEvent[] {
@@ -254,31 +228,9 @@ export class SnapshotStore {
   setFilterState(next: Partial<FilterState>): FilterState {
     this.filterState = {
       ...this.filterState,
-      ...next
+      ...next,
+      selectedZoneId: null
     };
     return this.getFilterState();
-  }
-
-  private ensureZone(zoneId: string, folderPrefix: string): ZoneInternal {
-    const existing = this.zones.get(zoneId);
-    if (existing) {
-      return existing;
-    }
-
-    const created: ZoneInternal = {
-      zoneId,
-      folderPrefix,
-      occupants: new Set<string>()
-    };
-    this.zones.set(zoneId, created);
-    return created;
-  }
-
-  private toZoneSnapshot(zone: ZoneInternal): ZoneSnapshot {
-    return {
-      zoneId: zone.zoneId,
-      folderPrefix: zone.folderPrefix,
-      occupants: [...zone.occupants].sort((a, b) => a.localeCompare(b))
-    };
   }
 }

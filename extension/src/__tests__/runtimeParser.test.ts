@@ -103,4 +103,28 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed).not.toBeNull();
     expect(parsed?.invokedSkillHint).toBe("fix-pr/SKILL.md");
   });
+
+  it("parses token usage from usage payload", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      agentId: "delta",
+      timestamp: "2026-02-27T01:24:00.000Z",
+      usage: {
+        input_tokens: 1201,
+        output_tokens: 233,
+        total_tokens: 1434
+      },
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "done" }]
+      }
+    });
+
+    const parsed = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: "fallback" });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.type).toBe("assistant_text");
+    expect(parsed?.promptTokens).toBe(1201);
+    expect(parsed?.completionTokens).toBe(233);
+    expect(parsed?.totalTokens).toBe(1434);
+  });
 });
