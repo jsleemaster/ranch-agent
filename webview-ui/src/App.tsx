@@ -35,6 +35,7 @@ export default function App(): JSX.Element {
   const world = useMemo(() => new WorldState(), []);
   const assets = useMemo(() => readAssetCatalog(), []);
   const [feedExpanded, setFeedExpanded] = useState(false);
+  const [rightView, setRightView] = useState<"pipeline" | "ranch">("pipeline");
 
   useWorldMessages(world);
 
@@ -72,98 +73,117 @@ export default function App(): JSX.Element {
 
   const activeCount = matchedAgents.filter((agent) => agent.state === "active").length;
   const waitingCount = matchedAgents.length - activeCount;
-  const harvestCount = matchedAgents.filter((agent) => agent.growthStage === "harvest").length;
-  const mainRiskCount = matchedAgents.filter((agent) => agent.mainBranchRisk).length;
-  const topSkill = snapshot.skills[0];
   const hasFilter = !!(snapshot.filter.selectedAgentId || snapshot.filter.selectedSkill || snapshot.filter.selectedZoneId);
-  const agentMdCatalogTitle =
-    snapshot.agentMds.length > 0
-      ? snapshot.agentMds.map((item) => item.label).join(", ")
-      : "workspace .claude/agents/*.md not found";
+  const totalTokens = snapshot.agents.reduce((sum, a) => sum + (a.totalTokensTotal ?? 0), 0);
+
+  const latestEvents = useMemo(() => {
+    return [...snapshot.feed].reverse().slice(0, 3);
+  }, [snapshot.feed]);
 
   return (
     <div className="app-shell">
-      <header className="hud-bar" title="🐮 에이전트 목장">
+      <header className="hud-bar" title="에이전트 대시보드">
         <div className="hud-meters">
-          <span className="hud-pill" title={`visible agents: ${matchedAgents.length}/${snapshot.agents.length}`}>
-            일꾼 {matchedAgents.length}
-          </span>
           <span className="hud-pill" title={`active: ${activeCount}`}>
             활동 {activeCount}
           </span>
           <span className="hud-pill" title={`waiting: ${waitingCount}`}>
             대기 {waitingCount}
           </span>
-          <span className="hud-pill" title={`harvest stage: ${harvestCount}`}>
-            수확 {harvestCount}
-          </span>
-          <span className={`hud-pill ${mainRiskCount > 0 ? "warn" : ""}`.trim()} title={`agents on protected branches: ${mainRiskCount}`}>
-            메인위험 {mainRiskCount}
-          </span>
-          <span className="hud-pill" title={agentMdCatalogTitle}>
-            등록에이전트 {snapshot.agentMds.length}
-          </span>
-          <span className="hud-pill" title={topSkill ? `top skill: ${topSkill.skill} (${topSkill.usageCount})` : "top skill: none"}>
-            상위 {topSkill?.usageCount ?? 0}
-          </span>
           <span className={`hud-pill ${hasFilter ? "on" : ""}`.trim()} title="filter state">
             필터 {hasFilter ? "ON" : "OFF"}
+          </span>
+          <span className="hud-pill token-pill" title={`총 토큰: ${totalTokens.toLocaleString()}`}>
+            🌾 {totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}K` : totalTokens}
           </span>
         </div>
       </header>
 
       <main className="panel-grid">
-        <section className="panel enter-a panel-agents" title="일꾼 우리">
-          <div className="panel-label">🐮 일꾼 우리</div>
-          <AgentBoard
-            agents={snapshot.agents}
-            agentMds={snapshot.agentMds}
-            filter={snapshot.filter}
-            assets={assets}
-            onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
-          />
-        </section>
+        <div className="left-sidebar-col">
+          <section className="panel panel-agents" title="에이전트 보드">
+            <div className="panel-label">🤖 에이전트 보드</div>
+            <AgentBoard
+              agents={snapshot.agents}
+              agentMds={snapshot.agentMds}
+              skillMds={snapshot.skillMds}
+              filter={snapshot.filter}
+              assets={assets}
+              onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
+            />
+          </section>
+        </div>
 
-        <section className="panel enter-b panel-flow" title="작업 동선">
-          <div className="panel-label">🔗 작업 동선</div>
-          <SkillFlowPanel
-            agents={snapshot.agents}
-            skillMetrics={snapshot.skills}
-            filter={snapshot.filter}
-            assets={assets}
-            onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
-            onSelectSkill={(skill) => send({ type: "select_skill", skill })}
-          />
-        </section>
+        <div className="right-content-col">
+          <section className="panel panel-flow">
+            <div className="view-toggle">
+              <button
+                className={`view-toggle-btn ${rightView === "pipeline" ? "on" : ""}`}
+                onClick={() => setRightView("pipeline")}
+              >
+                📊 파이프라인
+              </button>
+              <button
+                className={`view-toggle-btn ${rightView === "ranch" ? "on" : ""}`}
+                onClick={() => setRightView("ranch")}
+              >
+                🗺️ 목장 현황
+              </button>
+            </div>
 
-        <section className="panel enter-c panel-map" title="목장 구역">
-          <div className="panel-label">🗺️ 목장 구역</div>
-          <FolderMapPanel
-            zones={snapshot.zones}
-            agents={snapshot.agents}
-            filter={snapshot.filter}
-            assets={assets}
-            onSelectZone={(zoneId) => send({ type: "select_zone", zoneId })}
-          />
-        </section>
-
-        <section className="panel enter-d panel-feed" title="작업 일지">
-          <div className="panel-label">📜 작업 일지</div>
-          <button
-            className="panel-expand-btn"
-            title="작업 일지 더보기"
-            onClick={() => setFeedExpanded(true)}
-          >
-            더보기
-          </button>
-          <LiveFeedPanel
-            events={snapshot.feed}
-            filter={snapshot.filter}
-            assets={assets}
-            onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
-          />
-        </section>
+            {rightView === "pipeline" ? (
+              <SkillFlowPanel
+                agents={snapshot.agents}
+                skillMetrics={snapshot.skills}
+                filter={snapshot.filter}
+                assets={assets}
+                onSelectAgent={(agentId) => send({ type: "select_agent", agentId })}
+                onSelectSkill={(skill) => send({ type: "select_skill", skill })}
+              />
+            ) : (
+              <FolderMapPanel
+                zones={snapshot.zones}
+                agents={snapshot.agents}
+                filter={snapshot.filter}
+                assets={assets}
+                onSelectZone={(zoneId) => send({ type: "select_zone", zoneId })}
+              />
+            )}
+          </section>
+        </div>
       </main>
+
+      {/* Compact Activity Bar (replaces full panel) */}
+      <footer className="activity-bar">
+        <div className="activity-bar-label">📜 최근 활동</div>
+        <div className="activity-bar-items">
+          {latestEvents.length === 0 && (
+            <span className="activity-bar-empty">이벤트 대기 중</span>
+          )}
+          {latestEvents.map((event) => (
+            <button
+              key={event.id}
+              className="activity-chip"
+              title={`${event.agentId}\n${event.skill ?? "none"} · ${event.hookGate ?? "none"}\n${event.text ?? ""}`}
+              onClick={() => send({ type: "select_agent", agentId: event.agentId })}
+            >
+              <span className="activity-chip-time">{new Date(event.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+              <span className="activity-chip-agent">{event.agentId.length > 10 ? event.agentId.slice(0, 8) + "…" : event.agentId}</span>
+              <span className={`activity-chip-status ${event.hookGate === "failed" ? "failed" : ""}`}>
+                {event.skill ? event.skill.slice(0, 1).toUpperCase() : "·"}
+                {event.hookGate === "open" ? "✓" : event.hookGate === "failed" ? "✗" : "·"}
+              </span>
+            </button>
+          ))}
+        </div>
+        <button
+          className="activity-bar-expand"
+          title="전체 로그 열기"
+          onClick={() => setFeedExpanded(true)}
+        >
+          전체 로그 ▸
+        </button>
+      </footer>
 
       {feedExpanded ? (
         <div className="feed-overlay" onClick={() => setFeedExpanded(false)}>
