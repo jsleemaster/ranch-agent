@@ -22,6 +22,8 @@ export interface RawRuntimeEvent {
   mainBranchRisk?: boolean;
   invokedAgentHint?: string | null;
   invokedAgentMdId?: string | null;
+  invokedSkillHint?: string | null;
+  invokedSkillMdId?: string | null;
   detail?: string;
   isError?: boolean;
 }

@@ -156,4 +156,35 @@ describe("SnapshotStore", () => {
     expect(update.agent.agentMdCallsTotal).toBe(3);
     expect(update.agent.agentMdCallsById).toEqual({ reviewer: 2, planner: 1 });
   });
+
+  it("tracks invoked skill-md call counts per runtime agent", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-skill-md-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath),
+      folderMapper: new FolderMapper("/repo")
+    });
+
+    let update = store.applyRawEvent(makeEvent("tool_start", { invokedSkillMdId: "fix-pr", ts: 1 }));
+    expect(update.agent.skillMdCallsTotal).toBe(1);
+    expect(update.agent.skillMdCallsById).toEqual({ "fix-pr": 1 });
+    expect(update.feed.invokedSkillMdId).toBe("fix-pr");
+
+    update = store.applyRawEvent(makeEvent("tool_start", { invokedSkillMdId: "fix-pr", ts: 2 }));
+    expect(update.agent.skillMdCallsTotal).toBe(2);
+    expect(update.agent.skillMdCallsById).toEqual({ "fix-pr": 2 });
+
+    update = store.applyRawEvent(makeEvent("tool_start", { invokedSkillMdId: "test-generator", ts: 3 }));
+    expect(update.agent.skillMdCallsTotal).toBe(3);
+    expect(update.agent.skillMdCallsById).toEqual({ "fix-pr": 2, "test-generator": 1 });
+  });
 });

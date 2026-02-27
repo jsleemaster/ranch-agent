@@ -103,12 +103,25 @@ export class SnapshotStore {
     const branchName = raw.branchName ?? existing?.branchName ?? null;
     const isMainBranch = raw.isMainBranch ?? existing?.isMainBranch ?? false;
     const mainBranchRisk = raw.mainBranchRisk ?? existing?.mainBranchRisk ?? false;
+    const currentAgentMdId = raw.invokedAgentMdId ?? existing?.currentAgentMdId ?? null;
+    const currentSkillMdId = raw.invokedSkillMdId ?? existing?.currentSkillMdId ?? null;
+
     const prevAgentMdCallsById = existing?.agentMdCallsById ?? {};
     const nextAgentMdCallsById = { ...prevAgentMdCallsById };
+    const agentMdIncrement = raw.invokedAgentMdId ? 1 : 0;
     if (raw.invokedAgentMdId) {
       nextAgentMdCallsById[raw.invokedAgentMdId] = (nextAgentMdCallsById[raw.invokedAgentMdId] ?? 0) + 1;
     }
-    const agentMdCallsTotal = Object.values(nextAgentMdCallsById).reduce((sum, count) => sum + count, 0);
+    const agentMdCallsTotal = (existing?.agentMdCallsTotal ?? 0) + agentMdIncrement;
+
+    const prevSkillMdCallsById = existing?.skillMdCallsById ?? {};
+    const nextSkillMdCallsById = { ...prevSkillMdCallsById };
+    const skillMdIncrement = raw.invokedSkillMdId ? 1 : 0;
+    if (raw.invokedSkillMdId) {
+      nextSkillMdCallsById[raw.invokedSkillMdId] = (nextSkillMdCallsById[raw.invokedSkillMdId] ?? 0) + 1;
+    }
+    const skillMdCallsTotal = (existing?.skillMdCallsTotal ?? 0) + skillMdIncrement;
+
     const shouldGrow = GROWTH_EVENT_TYPES.has(raw.type);
     const usageCount = (existing?.usageCount ?? 0) + (shouldGrow ? 1 : 0);
     const growthStage = growthStageForUsage(usageCount);
@@ -125,8 +138,12 @@ export class SnapshotStore {
       branchName,
       isMainBranch,
       mainBranchRisk,
+      currentAgentMdId,
+      currentSkillMdId,
       agentMdCallsTotal,
       agentMdCallsById: nextAgentMdCallsById,
+      skillMdCallsTotal,
+      skillMdCallsById: nextSkillMdCallsById,
       usageCount,
       growthStage,
       lastEventTs: raw.ts
@@ -177,6 +194,7 @@ export class SnapshotStore {
       branchName,
       mainBranchRisk,
       invokedAgentMdId: raw.invokedAgentMdId ?? null,
+      invokedSkillMdId: raw.invokedSkillMdId ?? null,
       growthStage: growthStage,
       text: raw.detail
     };

@@ -5,10 +5,11 @@ import type {
   FilterState,
   GrowthStage,
   SkillKind,
+  SkillMdCatalogItem,
   SkillMetricSnapshot,
   ZoneSnapshot
 } from "@shared/domain";
-import type { ExtToWebviewMessage } from "@shared/protocol";
+import type { ExtToWebviewAtomicMessage, ExtToWebviewMessage } from "@shared/protocol";
 
 const FEED_LIMIT = 200;
 const GROWTH_STAGES = new Set<GrowthStage>(["seed", "sprout", "grow", "harvest"]);
@@ -45,6 +46,10 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
     mainBranchRisk?: unknown;
     agentMdCallsTotal?: unknown;
     agentMdCallsById?: unknown;
+    skillMdCallsTotal?: unknown;
+    skillMdCallsById?: unknown;
+    currentAgentMdId?: unknown;
+    currentSkillMdId?: unknown;
   };
   const usageCount = typeof candidate.usageCount === "number" && Number.isFinite(candidate.usageCount) ? candidate.usageCount : 0;
   const branchName = typeof candidate.branchName === "string" && candidate.branchName.trim().length > 0 ? candidate.branchName : null;
@@ -58,13 +63,27 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
     candidate.agentMdCallsById && typeof candidate.agentMdCallsById === "object" && !Array.isArray(candidate.agentMdCallsById)
       ? (candidate.agentMdCallsById as Record<string, number>)
       : {};
+  const skillMdCallsTotal =
+    typeof candidate.skillMdCallsTotal === "number" && Number.isFinite(candidate.skillMdCallsTotal)
+      ? candidate.skillMdCallsTotal
+      : 0;
+  const skillMdCallsById =
+    candidate.skillMdCallsById && typeof candidate.skillMdCallsById === "object" && !Array.isArray(candidate.skillMdCallsById)
+      ? (candidate.skillMdCallsById as Record<string, number>)
+      : {};
+  const currentAgentMdId = typeof candidate.currentAgentMdId === "string" ? candidate.currentAgentMdId : null;
+  const currentSkillMdId = typeof candidate.currentSkillMdId === "string" ? candidate.currentSkillMdId : null;
   return {
     ...agent,
     branchName,
     isMainBranch,
     mainBranchRisk,
+    currentAgentMdId,
+    currentSkillMdId,
     agentMdCallsTotal,
     agentMdCallsById,
+    skillMdCallsTotal,
+    skillMdCallsById,
     usageCount,
     growthStage: asGrowthStage(candidate.growthStage)
   };
@@ -88,6 +107,7 @@ export interface WorldSnapshot {
   zones: ZoneSnapshot[];
   skills: SkillMetricSnapshot[];
   agentMds: AgentMdCatalogItem[];
+  skillMds: SkillMdCatalogItem[];
   feed: FeedEvent[];
   filter: FilterState;
 }
@@ -99,6 +119,7 @@ export class WorldState {
   private readonly zones = new Map<string, ZoneSnapshot>();
   private readonly skills = new Map<SkillKind, SkillMetricSnapshot>();
   private agentMds: AgentMdCatalogItem[] = [];
+  private skillMds: SkillMdCatalogItem[] = [];
   private readonly feed: FeedEvent[] = [];
 
   private filter: FilterState = {
@@ -110,12 +131,27 @@ export class WorldState {
   private readonly listeners = new Set<Listener>();
 
   applyMessage(message: ExtToWebviewMessage): void {
+    if (message.type === "batch") {
+      if (message.messages.length === 0) {
+        return;
+      }
+      for (const item of message.messages) {
+        this.applyAtomicMessage(item, false);
+      }
+      this.emit();
+      return;
+    }
+    this.applyAtomicMessage(message, true);
+  }
+
+  private applyAtomicMessage(message: ExtToWebviewAtomicMessage, shouldEmit: boolean): void {
     switch (message.type) {
       case "world_init":
         this.agents.clear();
         this.zones.clear();
         this.skills.clear();
         this.agentMds = [...(message.agentMds ?? [])].sort((a, b) => a.label.localeCompare(b.label));
+        this.skillMds = [...(message.skillMds ?? [])].sort((a, b) => a.label.localeCompare(b.label));
         for (const agent of message.agents) {
           const next = normalizeAgent(agent);
           this.agents.set(next.agentId, next);
@@ -130,14 +166,18 @@ export class WorldState {
           }
           this.skills.set(nextMetric.skill, nextMetric);
         }
-        this.emit();
+        if (shouldEmit) {
+          this.emit();
+        }
         return;
       case "agent_upsert":
         {
           const next = normalizeAgent(message.agent);
           this.agents.set(next.agentId, next);
         }
-        this.emit();
+        if (shouldEmit) {
+          this.emit();
+        }
         return;
       case "skill_metric_upsert":
         {
@@ -146,11 +186,15 @@ export class WorldState {
             this.skills.set(nextMetric.skill, nextMetric);
           }
         }
-        this.emit();
+        if (shouldEmit) {
+          this.emit();
+        }
         return;
       case "zone_upsert":
         this.zones.set(message.zone.zoneId, message.zone);
-        this.emit();
+        if (shouldEmit) {
+          this.emit();
+        }
         return;
       case "feed_append":
         {
@@ -160,6 +204,10 @@ export class WorldState {
               typeof message.event.invokedAgentMdId === "string" && message.event.invokedAgentMdId.trim().length > 0
                 ? message.event.invokedAgentMdId
                 : null,
+            invokedSkillMdId:
+              typeof message.event.invokedSkillMdId === "string" && message.event.invokedSkillMdId.trim().length > 0
+                ? message.event.invokedSkillMdId
+                : null,
             growthStage: asGrowthStage(message.event.growthStage)
           };
           this.feed.push(eventWithStage);
@@ -167,7 +215,9 @@ export class WorldState {
         if (this.feed.length > FEED_LIMIT) {
           this.feed.shift();
         }
-        this.emit();
+        if (shouldEmit) {
+          this.emit();
+        }
         return;
       case "filter_state":
         this.filter = {
@@ -175,7 +225,9 @@ export class WorldState {
           selectedSkill: message.selectedSkill,
           selectedZoneId: message.selectedZoneId
         };
-        this.emit();
+        if (shouldEmit) {
+          this.emit();
+        }
         return;
       default:
         return;
@@ -188,6 +240,7 @@ export class WorldState {
       zones: [...this.zones.values()],
       skills: [...this.skills.values()].sort((a, b) => b.usageCount - a.usageCount || a.skill.localeCompare(b.skill)),
       agentMds: [...this.agentMds],
+      skillMds: [...this.skillMds],
       feed: [...this.feed],
       filter: { ...this.filter }
     };

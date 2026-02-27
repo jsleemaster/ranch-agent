@@ -11,6 +11,7 @@ type JsonObject = Record<string, unknown>;
 const TOOL_START_HINTS = new Set(["tool_start", "tool_use", "tool_call_start", "tool_called", "tool_invoked"]);
 const TOOL_DONE_HINTS = new Set(["tool_done", "tool_result", "tool_call_end", "tool_finished", "tool_use_done"]);
 const AGENT_MD_PATH_PATTERN = /(?:^|\/)\.claude\/agents\/([a-z0-9._-]+)\.md(?:$|[?#/])/i;
+const SKILL_MD_PATH_PATTERN = /(?:^|[\s"'`([{]|\/)\.claude\/skills\/([^?#\s]+?\.md)\b/i;
 
 interface ContentSignals {
   toolUse: {
@@ -378,6 +379,29 @@ function inferInvokedAgentHint(obj: JsonObject, contentSignals: ContentSignals):
   return matched[1];
 }
 
+function inferInvokedSkillHint(obj: JsonObject, contentSignals: ContentSignals): string | null {
+  const fromInput = pickString(contentSignals.toolUse?.input, ["skill", "skill_name", "skillName", "skill_id", "skillId"]);
+  if (fromInput) {
+    return fromInput;
+  }
+
+  const direct = pickString(obj, ["skill", "skill_name", "skillName", "skill_id", "skillId"]);
+  if (direct) {
+    return direct;
+  }
+
+  const fromText = inferDetail(obj, contentSignals);
+  if (!fromText) {
+    return null;
+  }
+
+  const matched = fromText.replace(/\\/g, "/").match(SKILL_MD_PATH_PATTERN);
+  if (!matched?.[1]) {
+    return null;
+  }
+  return matched[1];
+}
+
 export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRuntimeEvent | null {
   const trimmed = line.trim();
   if (trimmed.length === 0) {
@@ -427,6 +451,7 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
   const isError = explicitError ?? inferredError;
   const detail = inferDetail(obj, contentSignals);
   const invokedAgentHint = inferInvokedAgentHint(obj, contentSignals);
+  const invokedSkillHint = inferInvokedSkillHint(obj, contentSignals);
 
   return {
     runtime: options.runtime ?? "claude-jsonl",
@@ -439,6 +464,7 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
     workingDir: inferWorkingDir(obj),
     branchName: inferBranchName(obj),
     invokedAgentHint,
+    invokedSkillHint,
     detail,
     isError
   };

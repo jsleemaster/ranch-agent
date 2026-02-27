@@ -78,4 +78,29 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed?.branchName).toBe("main");
     expect(parsed?.invokedAgentHint).toBe("reviewer");
   });
+
+  it("parses invoked skill hint from SKILL.md path", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      sessionId: "sess-2",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_2",
+            name: "Task",
+            input: {
+              prompt: "Follow .claude/skills/fix-pr/SKILL.md before implementation"
+            }
+          }
+        ]
+      },
+      timestamp: "2026-02-26T08:31:00.000Z"
+    });
+
+    const parsed = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: "fallback" });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.invokedSkillHint).toBe("fix-pr/SKILL.md");
+  });
 });

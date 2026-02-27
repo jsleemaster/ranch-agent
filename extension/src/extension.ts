@@ -1,12 +1,13 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import type { ExtToWebviewMessage } from "../../shared/protocol";
+import type { ExtToWebviewAtomicMessage, ExtToWebviewMessage } from "../../shared/protocol";
 import { AUTO_RUNTIME_SCAN_MS, CONFIG_SECTION, MESSAGE_FLUSH_MS, MESSAGE_QUEUE_LIMIT, VIEW_TYPE } from "./constants";
 import { FolderMapper } from "./domain/folderMapper";
 import { SnapshotStore } from "./domain/snapshotStore";
 import { TeamResolver } from "./domain/teamResolver";
 import { AgentMdResolver } from "./agentMdResolver";
+import { SkillMdResolver } from "./skillMdResolver";
 import { loadAssetCatalog, toWebviewAssetCatalog } from "./assetPackLoader";
 import { type BranchDetectSettings, GitBranchResolver } from "./gitBranchResolver";
 import { parseWebviewMessage } from "./protocolGuards";
@@ -23,6 +24,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private readonly folderMapper: FolderMapper;
   private readonly store: SnapshotStore;
   private readonly agentMdResolver: AgentMdResolver;
+  private readonly skillMdResolver: SkillMdResolver;
   private readonly branchResolver: GitBranchResolver;
   private readonly runtimeHub: ClaudeJsonlRuntimeHub;
 
@@ -34,7 +36,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private webviewReady = false;
   private runtimeLogKey: string | null = null;
 
-  private messageQueue: ExtToWebviewMessage[] = [];
+  private messageQueue: ExtToWebviewAtomicMessage[] = [];
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
@@ -48,12 +50,14 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
       folderMapper: this.folderMapper
     });
     this.agentMdResolver = new AgentMdResolver(this.paths.workspaceRoot);
+    this.skillMdResolver = new SkillMdResolver(this.paths.workspaceRoot);
     this.branchResolver = new GitBranchResolver(this.paths.workspaceRoot, this.readBranchDetectSettings());
 
     this.runtimeHub = new ClaudeJsonlRuntimeHub({
       onEvent: (event) => {
         const branchEnriched = this.branchResolver.enrich(event);
-        const enrichedEvent = this.agentMdResolver.enrich(branchEnriched);
+        const agentEnriched = this.agentMdResolver.enrich(branchEnriched);
+        const enrichedEvent = this.skillMdResolver.enrich(agentEnriched);
         const update = this.store.applyRawEvent(enrichedEvent);
         this.enqueueMessage({ type: "agent_upsert", agent: update.agent });
         for (const metric of update.skillMetrics) {
@@ -116,6 +120,18 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     agentMdWatcher.onDidCreate(reloadAgentMdCatalog, this, this.disposables);
     agentMdWatcher.onDidDelete(reloadAgentMdCatalog, this, this.disposables);
     this.disposables.push(agentMdWatcher);
+
+    const skillMdWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(this.paths.workspaceRoot, ".claude/skills/**/*.md")
+    );
+    const reloadSkillMdCatalog = () => {
+      this.skillMdResolver.reload();
+      this.sendWorldInit();
+    };
+    skillMdWatcher.onDidChange(reloadSkillMdCatalog, this, this.disposables);
+    skillMdWatcher.onDidCreate(reloadSkillMdCatalog, this, this.disposables);
+    skillMdWatcher.onDidDelete(reloadSkillMdCatalog, this, this.disposables);
+    this.disposables.push(skillMdWatcher);
 
     this.updateRuntimeSource();
     this.runtimeScanTimer = setInterval(() => {
@@ -262,7 +278,8 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
       agents: world.agents,
       zones: world.zones,
       skills: world.skills,
-      agentMds: this.agentMdResolver.getCatalog()
+      agentMds: this.agentMdResolver.getCatalog(),
+      skillMds: this.skillMdResolver.getCatalog()
     } satisfies ExtToWebviewMessage);
 
     this.messageQueue = this.store.getFeed().map((event) => ({ type: "feed_append", event } satisfies ExtToWebviewMessage));
@@ -278,8 +295,45 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     });
   }
 
-  private enqueueMessage(message: ExtToWebviewMessage): void {
-    this.messageQueue.push(message);
+  private replaceQueuedMessage(
+    predicate: (queued: ExtToWebviewAtomicMessage) => boolean,
+    next: ExtToWebviewAtomicMessage
+  ): boolean {
+    for (let index = this.messageQueue.length - 1; index >= 0; index -= 1) {
+      if (!predicate(this.messageQueue[index])) {
+        continue;
+      }
+      this.messageQueue[index] = next;
+      return true;
+    }
+    return false;
+  }
+
+  private enqueueMessage(message: ExtToWebviewAtomicMessage): void {
+    let replaced = false;
+    if (message.type === "agent_upsert") {
+      replaced = this.replaceQueuedMessage(
+        (queued) => queued.type === "agent_upsert" && queued.agent.agentId === message.agent.agentId,
+        message
+      );
+    } else if (message.type === "skill_metric_upsert") {
+      replaced = this.replaceQueuedMessage(
+        (queued) => queued.type === "skill_metric_upsert" && queued.metric.skill === message.metric.skill,
+        message
+      );
+    } else if (message.type === "zone_upsert") {
+      replaced = this.replaceQueuedMessage(
+        (queued) => queued.type === "zone_upsert" && queued.zone.zoneId === message.zone.zoneId,
+        message
+      );
+    } else if (message.type === "filter_state") {
+      replaced = this.replaceQueuedMessage((queued) => queued.type === "filter_state", message);
+    }
+
+    if (!replaced) {
+      this.messageQueue.push(message);
+    }
+
     if (this.messageQueue.length > MESSAGE_QUEUE_LIMIT) {
       this.messageQueue.splice(0, this.messageQueue.length - MESSAGE_QUEUE_LIMIT);
     }
@@ -291,9 +345,14 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     }
 
     const batch = this.messageQueue.splice(0, 64);
-    for (const message of batch) {
-      this.view.webview.postMessage(message);
+    if (batch.length === 1) {
+      this.view.webview.postMessage(batch[0] satisfies ExtToWebviewMessage);
+      return;
     }
+    this.view.webview.postMessage({
+      type: "batch",
+      messages: batch
+    } satisfies ExtToWebviewMessage);
   }
 }
 
