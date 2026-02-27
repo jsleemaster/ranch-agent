@@ -49,13 +49,13 @@ interface DrawAgent {
 
 const ZONE_FALLBACK_COLORS: Record<string, string> = {
   src: "#3B5D2A",
-  apps: "#4F6B37",
+  apps: "#5C3A20",
   packages: "#7A5F2A",
-  infra: "#5A4B3A",
+  infra: "#4A3422",
   scripts: "#3E5D44",
-  docs: "#5D6B42",
-  tests: "#5A4C47",
-  etc: "#505050"
+  docs: "#6B5830",
+  tests: "#5A4030",
+  etc: "#4A3A2A"
 };
 
 function getImage(cache: Map<string, HTMLImageElement>, url: string | undefined): HTMLImageElement | null {
@@ -81,28 +81,28 @@ function seedFromAgent(agentId: string): number {
 
 function gateAura(gate: AgentSnapshot["currentHookGate"]): string | null {
   if (gate === "failed") {
-    return "rgba(255, 84, 97, 0.55)";
+    return "rgba(224, 85, 69, 0.55)";
   }
   if (gate === "blocked") {
-    return "rgba(255, 194, 94, 0.55)";
+    return "rgba(240, 184, 64, 0.5)";
   }
   if (gate === "open") {
-    return "rgba(118, 241, 152, 0.45)";
+    return "rgba(124, 198, 110, 0.45)";
   }
   return null;
 }
 
 function growthAura(agent: AgentSnapshot): string {
   if (agent.growthStage === "harvest") {
-    return "rgba(255, 221, 120, 0.55)";
+    return "rgba(240, 184, 64, 0.5)";
   }
   if (agent.growthStage === "grow") {
-    return "rgba(165, 240, 128, 0.45)";
+    return "rgba(140, 200, 80, 0.4)";
   }
   if (agent.growthStage === "sprout") {
-    return "rgba(118, 226, 139, 0.35)";
+    return "rgba(90, 180, 70, 0.35)";
   }
-  return "rgba(122, 159, 122, 0.2)";
+  return "rgba(120, 85, 50, 0.2)";
 }
 
 function matchesAgent(agent: AgentSnapshot, filter: FilterState): boolean {
@@ -160,8 +160,8 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
       context.clearRect(0, 0, width, height);
 
       const gradient = context.createLinearGradient(0, 0, width, height);
-      gradient.addColorStop(0, "#1D2718");
-      gradient.addColorStop(1, "#2A1F16");
+      gradient.addColorStop(0, "#1A1008");
+      gradient.addColorStop(1, "#2E1E0F");
       context.fillStyle = gradient;
       context.fillRect(0, 0, width, height);
 
@@ -204,7 +204,7 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
           context.fillRect(x + 2, y + 2, w - 4, 3);
         }
 
-        context.strokeStyle = activeFilter.selectedZoneId === zone.zoneId ? "#FFE16E" : "rgba(210,230,250,0.3)";
+        context.strokeStyle = activeFilter.selectedZoneId === zone.zoneId ? "#F0B840" : "rgba(180, 130, 70, 0.4)";
         context.lineWidth = activeFilter.selectedZoneId === zone.zoneId ? 3 : 1.5;
         context.strokeRect(x + 1, y + 1, w - 2, h - 2);
 
@@ -270,8 +270,8 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
         const movement = Math.hypot(x - fromX, y - fromY);
         if (movement > 0.1 && matched) {
           const trailGradient = context.createLinearGradient(fromX, fromY, x, y);
-          trailGradient.addColorStop(0, "rgba(110, 186, 245, 0.06)");
-          trailGradient.addColorStop(1, "rgba(110, 186, 245, 0.45)");
+          trailGradient.addColorStop(0, "rgba(212, 134, 11, 0.06)");
+          trailGradient.addColorStop(1, "rgba(212, 134, 11, 0.4)");
           context.strokeStyle = trailGradient;
           context.lineWidth = 2.5;
           context.beginPath();
@@ -286,7 +286,7 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
 
         if (agent.state === "active" && matched) {
           const pulse = 0.55 + (Math.sin(now * 5 + pulseSeed) + 1) * 0.25;
-          context.fillStyle = `rgba(118, 241, 152, ${pulse.toFixed(3)})`;
+          context.fillStyle = `rgba(124, 198, 110, ${pulse.toFixed(3)})`;
           context.beginPath();
           context.arc(x + size / 2, y + size / 2, size * 0.7, 0, Math.PI * 2);
           context.fill();
@@ -308,18 +308,18 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
         if (sprite) {
           context.drawImage(sprite, x, y, size, size);
         } else {
-          context.fillStyle = agent.state === "active" ? "#89E89D" : "#B0BAC7";
+          context.fillStyle = agent.state === "active" ? "#7CC66E" : "#A89478";
           context.beginPath();
           context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
           context.fill();
           context.font = "14px sans-serif";
           context.textAlign = "center";
           context.textBaseline = "middle";
-          context.fillStyle = "#1D2D1F";
+          context.fillStyle = "#1A1008";
           context.fillText(teamEmoji(agent), x + size / 2, y + size / 2 + 1);
         }
 
-        context.strokeStyle = activeFilter.selectedAgentId === agent.agentId ? "#FFE16E" : "rgba(20,30,40,0.5)";
+        context.strokeStyle = activeFilter.selectedAgentId === agent.agentId ? "#F0B840" : "rgba(74, 52, 34, 0.6)";
         context.lineWidth = activeFilter.selectedAgentId === agent.agentId ? 2.5 : 1;
         context.strokeRect(x - 1, y - 1, size + 2, size + 2);
 
@@ -330,7 +330,7 @@ export default function FolderMapPanel({ zones, agents, filter, assets, onSelect
           context.font = "12px sans-serif";
           context.textAlign = "left";
           context.textBaseline = "top";
-          context.fillStyle = "#f7f7f7";
+          context.fillStyle = "#F5E6C8";
           context.fillText(gateEmoji(agent.currentHookGate), x + size - 8, y - 6);
         }
         context.globalAlpha = 1;

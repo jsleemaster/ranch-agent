@@ -83,7 +83,7 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app-shell">
-      <header className="hud-bar" title="에이전트 목장">
+      <header className="hud-bar" title="🐮 에이전트 목장">
         <div className="hud-meters">
           <span className="hud-pill" title={`visible agents: ${matchedAgents.length}/${snapshot.agents.length}`}>
             일꾼 {matchedAgents.length}
@@ -114,7 +114,7 @@ export default function App(): JSX.Element {
 
       <main className="panel-grid">
         <section className="panel enter-a panel-agents" title="일꾼 우리">
-          <div className="panel-label">일꾼 우리</div>
+          <div className="panel-label">🐮 일꾼 우리</div>
           <AgentBoard
             agents={snapshot.agents}
             agentMds={snapshot.agentMds}
@@ -125,7 +125,7 @@ export default function App(): JSX.Element {
         </section>
 
         <section className="panel enter-b panel-flow" title="작업 동선">
-          <div className="panel-label">작업 동선</div>
+          <div className="panel-label">🔗 작업 동선</div>
           <SkillFlowPanel
             agents={snapshot.agents}
             skillMetrics={snapshot.skills}
@@ -137,7 +137,7 @@ export default function App(): JSX.Element {
         </section>
 
         <section className="panel enter-c panel-map" title="목장 구역">
-          <div className="panel-label">목장 구역</div>
+          <div className="panel-label">🗺️ 목장 구역</div>
           <FolderMapPanel
             zones={snapshot.zones}
             agents={snapshot.agents}
@@ -148,7 +148,7 @@ export default function App(): JSX.Element {
         </section>
 
         <section className="panel enter-d panel-feed" title="작업 일지">
-          <div className="panel-label">작업 일지</div>
+          <div className="panel-label">📜 작업 일지</div>
           <button
             className="panel-expand-btn"
             title="작업 일지 더보기"

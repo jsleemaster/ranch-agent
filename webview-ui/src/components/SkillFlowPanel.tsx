@@ -139,15 +139,15 @@ export default function SkillFlowPanel({
 
           return (
             <g key={agent.agentId} className={matched ? "" : "flow-row-muted"}>
-              <line className="flow-link" x1={58} y1={y} x2={148} y2={y} stroke="#497B7A" strokeWidth={2} opacity={0.8} />
-              <line className="flow-link" x1={176} y1={y} x2={266} y2={y} stroke="#77603A" strokeWidth={2} opacity={0.8} />
+              <line className="flow-link" x1={38} y1={y} x2={108} y2={y} stroke="#8B6B3E" strokeWidth={2} opacity={0.7} />
+              <line className="flow-link" x1={136} y1={y} x2={206} y2={y} stroke="#6B8A42" strokeWidth={2} opacity={0.7} />
 
               <Node
-                x={42}
+                x={22}
                 y={y}
                 size={30}
                 imageUrl={teamUrl}
-                fallbackColor="#4A6E52"
+                fallbackColor="#5C3A20"
                 fallbackEmoji={teamEmoji(agent)}
                 stage={agent.growthStage}
                 usageCount={agent.usageCount}
@@ -157,11 +157,11 @@ export default function SkillFlowPanel({
               />
 
               <Node
-                x={162}
+                x={122}
                 y={y}
                 size={30}
                 imageUrl={skillUrl}
-                fallbackColor="#5A6A3E"
+                fallbackColor="#4A6B30"
                 fallbackEmoji={skillEmoji(skill)}
                 stage={skillMetric?.growthStage ?? "seed"}
                 usageCount={skillMetric?.usageCount ?? 0}
@@ -171,11 +171,11 @@ export default function SkillFlowPanel({
               />
 
               <Node
-                x={282}
+                x={222}
                 y={y}
                 size={30}
                 imageUrl={gateUrl}
-                fallbackColor="#6B5A4B"
+                fallbackColor="#6B4F36"
                 fallbackEmoji={gateEmoji(gate)}
                 selected={false}
                 title={`gate: ${gate ?? "none"}`}
