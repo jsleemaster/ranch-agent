@@ -41,9 +41,40 @@ describe("SnapshotStore", () => {
     const wait = store.applyRawEvent(makeEvent("permission_wait"));
     const done = store.applyRawEvent(makeEvent("tool_done"));
 
+    expect(start.agent.runtimeRole).toBe("main");
     expect(start.agent.currentHookGate).toBe("open");
     expect(wait.agent.currentHookGate).toBe("blocked");
     expect(done.agent.currentHookGate).toBe("closed");
+  });
+
+  it("classifies runtime role as team/subagent/main", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-role-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    let update = store.applyRawEvent(makeEvent("tool_start", { ts: 1 }));
+    expect(update.agent.runtimeRole).toBe("main");
+
+    update = store.applyRawEvent(
+      makeEvent("tool_start", { ts: 2, toolName: "Task", invokedAgentMdId: "code-reviewer" })
+    );
+    expect(update.agent.runtimeRole).toBe("team");
+
+    update = store.applyRawEvent(
+      makeEvent("assistant_text", { ts: 3, sourcePath: "/Users/me/.claude/projects/repo/subagents/worker-1.jsonl" })
+    );
+    expect(update.agent.runtimeRole).toBe("subagent");
   });
 
   it("measures wait durations for permission and turn waits", () => {
@@ -104,30 +135,50 @@ describe("SnapshotStore", () => {
       update = store.applyRawEvent(makeEvent("tool_start", { ts: i }));
     }
     expect(update.agent.usageCount).toBe(4);
+    expect(update.agent.growthLevel).toBe(1);
+    expect(update.agent.growthLevelUsage).toBe(4);
     expect(update.agent.growthStage).toBe("seed");
 
     update = store.applyRawEvent(makeEvent("tool_start", { ts: 5 }));
     expect(update.agent.usageCount).toBe(5);
+    expect(update.agent.growthLevel).toBe(1);
+    expect(update.agent.growthLevelUsage).toBe(5);
     expect(update.agent.growthStage).toBe("sprout");
 
     for (let i = 6; i <= 14; i += 1) {
       update = store.applyRawEvent(makeEvent("tool_start", { ts: i }));
     }
     expect(update.agent.usageCount).toBe(14);
+    expect(update.agent.growthLevel).toBe(1);
+    expect(update.agent.growthLevelUsage).toBe(14);
     expect(update.agent.growthStage).toBe("sprout");
 
     update = store.applyRawEvent(makeEvent("tool_start", { ts: 15 }));
+    expect(update.agent.growthLevel).toBe(1);
+    expect(update.agent.growthLevelUsage).toBe(15);
     expect(update.agent.growthStage).toBe("grow");
 
-    for (let i = 16; i <= 34; i += 1) {
+    for (let i = 16; i <= 24; i += 1) {
+      update = store.applyRawEvent(makeEvent("tool_start", { ts: i }));
+    }
+    expect(update.agent.usageCount).toBe(24);
+    expect(update.agent.growthLevel).toBe(1);
+    expect(update.agent.growthLevelUsage).toBe(24);
+    expect(update.agent.growthStage).toBe("grow");
+
+    for (let i = 25; i <= 34; i += 1) {
       update = store.applyRawEvent(makeEvent("tool_start", { ts: i }));
     }
     expect(update.agent.usageCount).toBe(34);
-    expect(update.agent.growthStage).toBe("grow");
+    expect(update.agent.growthLevel).toBe(1);
+    expect(update.agent.growthLevelUsage).toBe(34);
+    expect(update.agent.growthStage).toBe("harvest");
 
     update = store.applyRawEvent(makeEvent("tool_start", { ts: 35 }));
     expect(update.agent.usageCount).toBe(35);
-    expect(update.agent.growthStage).toBe("harvest");
+    expect(update.agent.growthLevel).toBe(2);
+    expect(update.agent.growthLevelUsage).toBe(0);
+    expect(update.agent.growthStage).toBe("seed");
   });
 
   it("accumulates skill metrics and exposes upsert payload", () => {

@@ -32,6 +32,28 @@ function stateClass(state: AgentSnapshot["state"]): string {
   return state === "active" ? "state-active" : "state-waiting";
 }
 
+function runtimeRoleLabel(role: AgentSnapshot["runtimeRole"]): string {
+  switch (role) {
+    case "subagent":
+      return "서브";
+    case "team":
+      return "팀";
+    default:
+      return "메인";
+  }
+}
+
+function runtimeRoleEmoji(role: AgentSnapshot["runtimeRole"]): string {
+  switch (role) {
+    case "subagent":
+      return "🧩";
+    case "team":
+      return "🧭";
+    default:
+      return "🖥️";
+  }
+}
+
 function matchesAgent(agent: AgentSnapshot, filter: FilterState): boolean {
   if (filter.selectedAgentId && agent.agentId !== filter.selectedAgentId) {
     return false;
@@ -129,14 +151,16 @@ export default function AgentBoard({
                   key={agent.agentId} 
                   className={`agent-card ${agent.state} ${selected ? "selected" : ""} growth-${agent.growthStage} ${agent.mainBranchRisk ? "branch-risk" : ""}`}
                   onClick={() => onSelectAgent(selected ? null : agent.agentId)}
-                  title={`Agent: ${agent.agentId}\nTarget: ${agent.branchName}\nMDs: ${agent.agentMdCallsTotal}`}
+                  title={`Agent: ${agent.agentId}\nRole: ${runtimeRoleLabel(agent.runtimeRole)}\nTarget: ${agent.branchName}\nMDs: ${agent.agentMdCallsTotal}`}
                 >
-                  <div className="agent-md-badge" title="총 작업 횟수 (MD Call Count)">
-                    {agent.agentMdCallsTotal}
+
+
+                  <div className={`agent-role-badge role-${agent.runtimeRole}`} title={`역할: ${runtimeRoleLabel(agent.runtimeRole)}`}>
+                    <span>{runtimeRoleEmoji(agent.runtimeRole)}</span>
+                    <span>{runtimeRoleLabel(agent.runtimeRole)}</span>
                   </div>
                   
                   {agent.state === "active" && <div className="state-ring state-active" />}
-                  <div className="growth-badge" title={`성장 단계: ${growthLabel(agent.growthStage)}`}>{growthEmoji(agent.growthStage)}</div>
                   
                   <IconToken 
                     src={teamIcon} 
@@ -164,6 +188,11 @@ export default function AgentBoard({
                       title={`현재 구역: ${zoneLabel(agent.currentZoneId)}`} 
                       className="icon-token mini-icon" 
                     />
+                  </div>
+
+                  <div className="agent-level-badge" title={`레벨: ${agent.growthLevel}\n성장 단계: ${growthLabel(agent.growthStage)}\n진행도: ${agent.growthLevelUsage}/35`}>
+                    <span className="agent-level-text">Lv.{agent.growthLevel}</span>
+                    <span className="agent-level-stage">{growthEmoji(agent.growthStage)} {agent.growthLevelUsage}/35</span>
                   </div>
 
                   {(agent.totalTokensTotal ?? 0) > 0 && (

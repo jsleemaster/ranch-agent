@@ -1,5 +1,6 @@
 import type {
   AgentMdCatalogItem,
+  AgentRuntimeRole,
   AgentSnapshot,
   FeedEvent,
   FilterState,
@@ -13,6 +14,7 @@ import type { ExtToWebviewAtomicMessage, ExtToWebviewMessage } from "@shared/pro
 
 const FEED_LIMIT = 200;
 const GROWTH_STAGES = new Set<GrowthStage>(["seed", "sprout", "grow", "harvest"]);
+const GROWTH_LEVEL_SPAN = 35;
 
 function asGrowthStage(value: unknown): GrowthStage {
   if (typeof value === "string" && GROWTH_STAGES.has(value as GrowthStage)) {
@@ -35,6 +37,13 @@ function asSkillKind(value: unknown): SkillKind | null {
     return value;
   }
   return null;
+}
+
+function asRuntimeRole(value: unknown): AgentRuntimeRole {
+  if (value === "main" || value === "team" || value === "subagent") {
+    return value;
+  }
+  return "main";
 }
 
 function normalizeSkillUsageByKind(value: unknown): Record<SkillKind, number> {
@@ -71,7 +80,10 @@ function normalizeSkillUsageByKind(value: unknown): Record<SkillKind, number> {
 function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
   const candidate = agent as AgentSnapshot & {
     usageCount?: unknown;
+    growthLevel?: unknown;
+    growthLevelUsage?: unknown;
     growthStage?: unknown;
+    runtimeRole?: unknown;
     branchName?: unknown;
     isMainBranch?: unknown;
     mainBranchRisk?: unknown;
@@ -84,6 +96,19 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
     skillUsageByKind?: unknown;
   };
   const usageCount = typeof candidate.usageCount === "number" && Number.isFinite(candidate.usageCount) ? candidate.usageCount : 0;
+  const growthLevelFromUsage = Math.floor(Math.max(0, usageCount) / GROWTH_LEVEL_SPAN) + 1;
+  const growthLevel =
+    typeof candidate.growthLevel === "number" && Number.isFinite(candidate.growthLevel) && candidate.growthLevel > 0
+      ? Math.floor(candidate.growthLevel)
+      : growthLevelFromUsage;
+  const growthLevelUsageFromUsage = Math.max(0, usageCount) % GROWTH_LEVEL_SPAN;
+  const growthLevelUsage =
+    typeof candidate.growthLevelUsage === "number" &&
+    Number.isFinite(candidate.growthLevelUsage) &&
+    candidate.growthLevelUsage >= 0
+      ? Math.floor(candidate.growthLevelUsage) % GROWTH_LEVEL_SPAN
+      : growthLevelUsageFromUsage;
+  const runtimeRole = asRuntimeRole(candidate.runtimeRole);
   const branchName = typeof candidate.branchName === "string" && candidate.branchName.trim().length > 0 ? candidate.branchName : null;
   const isMainBranch = candidate.isMainBranch === true;
   const mainBranchRisk = candidate.mainBranchRisk === true;
@@ -108,6 +133,7 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
   const skillUsageByKind = normalizeSkillUsageByKind(candidate.skillUsageByKind);
   return {
     ...agent,
+    runtimeRole,
     branchName,
     isMainBranch,
     mainBranchRisk,
@@ -119,6 +145,8 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
     skillMdCallsTotal,
     skillMdCallsById,
     usageCount,
+    growthLevel,
+    growthLevelUsage,
     growthStage: asGrowthStage(candidate.growthStage)
   };
 }

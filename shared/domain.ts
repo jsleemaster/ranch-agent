@@ -1,6 +1,7 @@
 export type SkillKind = "read" | "edit" | "write" | "bash" | "search" | "task" | "ask" | "other";
 export type HookGateState = "open" | "blocked" | "failed" | "closed";
 export type GrowthStage = "seed" | "sprout" | "grow" | "harvest";
+export type AgentRuntimeRole = "main" | "team" | "subagent";
 
 export interface AgentMdCatalogItem {
   id: string;
@@ -20,6 +21,7 @@ export interface AgentSnapshot {
   icon: string;
   color: string;
   state: "active" | "waiting";
+  runtimeRole: AgentRuntimeRole;
   currentSkill: SkillKind | null;
   currentHookGate: HookGateState | null;
   currentZoneId: string | null;
@@ -52,6 +54,8 @@ export interface AgentSnapshot {
   toolRunAvgMs?: number;
   lastToolRunMs?: number;
   usageCount: number;
+  growthLevel: number;
+  growthLevelUsage: number;
   growthStage: GrowthStage;
   lastEventTs: number;
 }

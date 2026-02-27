@@ -13,6 +13,7 @@ export interface RawRuntimeEvent {
   agentRuntimeId: string;
   ts: number;
   type: RuntimeEventType;
+  sourcePath?: string;
   toolName?: string;
   toolId?: string;
   filePath?: string;

@@ -239,16 +239,21 @@ export class ClaudeJsonlRuntimeHub {
         continue;
       }
 
-      this.registerActivity(event.agentRuntimeId, event.ts, event.type);
+      const sourceEvent = {
+        ...event,
+        sourcePath: source.filePath
+      };
 
-      if (event.type === "turn_waiting") {
-        this.idleAgents.add(event.agentRuntimeId);
+      this.registerActivity(sourceEvent.agentRuntimeId, sourceEvent.ts, sourceEvent.type);
+
+      if (sourceEvent.type === "turn_waiting") {
+        this.idleAgents.add(sourceEvent.agentRuntimeId);
       }
-      if (event.type === "turn_active") {
-        this.idleAgents.delete(event.agentRuntimeId);
+      if (sourceEvent.type === "turn_active") {
+        this.idleAgents.delete(sourceEvent.agentRuntimeId);
       }
 
-      this.pushEvent(event);
+      this.pushEvent(sourceEvent);
     }
   }
 

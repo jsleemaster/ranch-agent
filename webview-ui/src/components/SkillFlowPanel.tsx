@@ -71,6 +71,17 @@ export function skillLabel(skill: string | null): string {
   return labels[skill] ?? skill;
 }
 
+function runtimeRoleLabel(role: AgentSnapshot["runtimeRole"]): string {
+  switch (role) {
+    case "subagent":
+      return "서브";
+    case "team":
+      return "팀";
+    default:
+      return "메인";
+  }
+}
+
 function shortId(id: string): string {
   if (id.length <= 12) return id;
   const dash = id.indexOf("-");
@@ -78,14 +89,11 @@ function shortId(id: string): string {
   return id.slice(0, 10) + "…";
 }
 
-function xpPercent(stage: AgentSnapshot["growthStage"]): number {
-  switch (stage) {
-    case "seed": return 10;
-    case "sprout": return 35;
-    case "grow": return 65;
-    case "harvest": return 100;
-    default: return 0;
+function xpPercent(growthLevelUsage: number): number {
+  if (growthLevelUsage <= 0) {
+    return 0;
   }
+  return Math.min(100, Math.round((growthLevelUsage / 34) * 100));
 }
 
 function formatTokens(n: number | undefined): string {
@@ -126,7 +134,7 @@ export default function SkillFlowPanel({
         const agentSkillCount = skill ? (agent.skillUsageByKind[skill] ?? 0) : 0;
         const teamIcon = iconUrl(assets, teamIconKey(agent));
         const skillIcon = iconUrl(assets, skillIconKey(skill));
-        const xp = xpPercent(agent.growthStage);
+        const xp = xpPercent(agent.growthLevelUsage);
 
         return (
           <div
@@ -147,13 +155,21 @@ export default function SkillFlowPanel({
 
             {/* Agent Info */}
             <div className="pipeline-info">
-              <div className="pipeline-name">{shortId(agent.agentId)}</div>
+              <div className="pipeline-name">
+                {shortId(agent.agentId)}
+                <span className={`pipeline-role role-${agent.runtimeRole}`}>{runtimeRoleLabel(agent.runtimeRole)}</span>
+              </div>
               <div className="pipeline-xp-bar">
                 <div
                   className={`pipeline-xp-fill growth-${agent.growthStage}`}
                   style={{ width: `${xp}%` }}
                 />
-                <span className="pipeline-xp-label">{growthEmoji(agent.growthStage)} {growthLabel(agent.growthStage)}</span>
+                <span
+                  className="pipeline-xp-label"
+                  title={`레벨 ${agent.growthLevel} · 단계 ${growthLabel(agent.growthStage)} · 진행도 ${agent.growthLevelUsage}/35`}
+                >
+                  Lv.{agent.growthLevel} {growthEmoji(agent.growthStage)} {growthLabel(agent.growthStage)} ({agent.growthLevelUsage}/35)
+                </span>
               </div>
             </div>
 

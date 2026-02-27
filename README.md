@@ -25,7 +25,7 @@ Emoji-first VS Code extension for visualizing multi-agent runtime activity as a 
 ## Panel Guide (중복 없는 정의)
 
 1. `일꾼 우리`:
-   에이전트 상태(활동/대기), 현재 스킬/게이트, 성장단계, 브랜치 위험, Agent-MD 호출 누적을 본다.
+   에이전트 상태(활동/대기), 역할(메인/팀/서브), 현재 스킬/게이트, 성장단계, 브랜치 위험, Agent-MD 호출 누적을 본다.
 2. `작업 동선`:
    `agent -> skill -> gate` 흐름을 한 줄로 표시해 어떤 에이전트가 어떤 작업 경로에 있는지 본다.
 3. `목장 구역`:
@@ -204,12 +204,13 @@ npm run sync:installed
 
 ### D. 성장 단계 읽는 법
 
-- `seed`: 0-4
-- `sprout`: 5-14
-- `grow`: 15-34
-- `harvest`: 35+
-
-증가 트리거 이벤트는 `tool_start`, `tool_done`, `assistant_text` 입니다.
+- 레벨은 `35회` 활동마다 1씩 증가합니다. (`Lv = floor(usageCount/35) + 1`)
+- 단계는 레벨 내부 진행도(`usageCount % 35`) 기준으로 순환합니다.
+  - `seed`: 0-4
+  - `sprout`: 5-14
+  - `grow`: 15-24
+  - `harvest`: 25-34
+- 증가 트리거 이벤트는 `tool_start`, `tool_done`, `assistant_text` 입니다.
 
 ### E. 자주 헷갈리는 포인트
 

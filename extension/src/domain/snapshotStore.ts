@@ -1,5 +1,6 @@
 import type {
   AgentSnapshot,
+  AgentRuntimeRole,
   FeedEvent,
   FilterState,
   GrowthStage,
@@ -16,6 +17,7 @@ import type { TeamResolver } from "./teamResolver";
 const SKILL_ORDER: SkillKind[] = ["read", "edit", "write", "bash", "search", "task", "ask", "other"];
 const GROWTH_EVENT_TYPES = new Set<RawRuntimeEvent["type"]>(["tool_start", "tool_done", "assistant_text"]);
 const MAX_PENDING_TOOL_STARTS = 256;
+const GROWTH_LEVEL_SPAN = 35;
 
 type WaitKind = "permission" | "turn";
 
@@ -30,17 +32,54 @@ interface PendingToolStartState {
   toolName: string | null;
 }
 
-function growthStageForUsage(usageCount: number): GrowthStage {
-  if (usageCount >= 35) {
+function growthLevelForUsage(usageCount: number): number {
+  const safeUsage = Math.max(0, Math.floor(usageCount));
+  return Math.floor(safeUsage / GROWTH_LEVEL_SPAN) + 1;
+}
+
+function growthLevelUsageForUsage(usageCount: number): number {
+  const safeUsage = Math.max(0, Math.floor(usageCount));
+  return safeUsage % GROWTH_LEVEL_SPAN;
+}
+
+function growthStageForLevelUsage(growthLevelUsage: number): GrowthStage {
+  if (growthLevelUsage >= 25) {
     return "harvest";
   }
-  if (usageCount >= 15) {
+  if (growthLevelUsage >= 15) {
     return "grow";
   }
-  if (usageCount >= 5) {
+  if (growthLevelUsage >= 5) {
     return "sprout";
   }
   return "seed";
+}
+
+function growthStageForUsage(usageCount: number): GrowthStage {
+  return growthStageForLevelUsage(growthLevelUsageForUsage(usageCount));
+}
+
+function isSubagentSourcePath(sourcePath: string | undefined): boolean {
+  if (!sourcePath) {
+    return false;
+  }
+  const normalized = sourcePath.replace(/\\/g, "/").toLowerCase();
+  return normalized.includes("/subagents/");
+}
+
+function deriveRuntimeRole(raw: RawRuntimeEvent, existingRole: AgentRuntimeRole | undefined): AgentRuntimeRole {
+  if (isSubagentSourcePath(raw.sourcePath)) {
+    return "subagent";
+  }
+
+  const hasAgentInvocationHint =
+    (raw.invokedAgentMdId?.trim().length ?? 0) > 0 || (raw.invokedAgentHint?.trim().length ?? 0) > 0;
+  const toolName = raw.toolName?.trim().toLowerCase() ?? "";
+  if (hasAgentInvocationHint || toolName === "task") {
+    return "team";
+  }
+
+  return existingRole ?? "main";
 }
 
 function createEmptySkillUsageByKind(): Record<SkillKind, number> {
@@ -144,6 +183,7 @@ export class SnapshotStore {
     const nextZoneId = null;
 
     const currentSkill: SkillKind | null = nextSkill ?? existing?.currentSkill ?? null;
+    const runtimeRole = deriveRuntimeRole(raw, existing?.runtimeRole);
     const currentHookGate = nextGate ?? existing?.currentHookGate ?? null;
     const currentState = nextState ?? existing?.state ?? "waiting";
     const branchName = raw.branchName ?? existing?.branchName ?? null;
@@ -235,6 +275,8 @@ export class SnapshotStore {
     }
 
     const usageCount = (existing?.usageCount ?? 0) + (shouldGrow ? 1 : 0);
+    const growthLevel = growthLevelForUsage(usageCount);
+    const growthLevelUsage = growthLevelUsageForUsage(usageCount);
     const growthStage = growthStageForUsage(usageCount);
 
     const agent: AgentSnapshot = {
@@ -243,6 +285,7 @@ export class SnapshotStore {
       icon: team.icon,
       color: team.color,
       state: currentState,
+      runtimeRole,
       currentSkill,
       currentHookGate,
       currentZoneId: nextZoneId,
@@ -275,6 +318,8 @@ export class SnapshotStore {
       toolRunAvgMs: toolRunCount > 0 ? Math.round(toolRunTotalMs / toolRunCount) : 0,
       lastToolRunMs,
       usageCount,
+      growthLevel,
+      growthLevelUsage,
       growthStage,
       lastEventTs: raw.ts
     };

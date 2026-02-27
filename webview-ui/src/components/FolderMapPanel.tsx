@@ -180,13 +180,13 @@ export default function FolderMapPanel({
       if (zoneCount === 0) return;
 
       const aspect = wWidth / (wHeight || 1);
-      let cols = Math.ceil(Math.sqrt(zoneCount * aspect));
+      let cols = Math.ceil(Math.sqrt(zoneCount * (aspect || 1)));
       if (zoneCount === 1) cols = 1;
       const rows = Math.ceil(zoneCount / (cols || 1));
 
       const gap = isMinimap ? 4 : 8;
-      const tileW = (wWidth - (cols + 1) * gap) / (cols || 1);
-      const tileH = (wHeight - (rows + 1) * gap) / (rows || 1);
+      const tileW = Math.max(10, (wWidth - (cols + 1) * gap) / (cols || 1));
+      const tileH = Math.max(10, (wHeight - (rows + 1) * gap) / (rows || 1));
 
       zoneRectsRef.current = [];
       const now = Date.now() / 1000;
@@ -211,12 +211,16 @@ export default function FolderMapPanel({
         const isEmpty = zoneAgents.length === 0;
 
         // Tile background
-        context.fillStyle = isSelected ? "rgba(74, 52, 34, 0.4)" : "rgba(30, 24, 15, 0.3)";
+        if (isMinimap) {
+            context.fillStyle = isSelected ? "rgba(212, 134, 11, 0.25)" : "rgba(0, 0, 0, 0.45)";
+        } else {
+            context.fillStyle = isSelected ? "rgba(74, 52, 34, 0.4)" : "rgba(30, 24, 15, 0.3)";
+        }
         drawRoundedRect(context, x, y, w, h, 8);
         context.fill();
 
         // Border
-        context.strokeStyle = isSelected ? "#F0B840" : "rgba(139, 107, 62, 0.2)";
+        context.strokeStyle = isSelected ? "#F0B840" : (isMinimap ? "rgba(212, 134, 11, 0.15)" : "rgba(139, 107, 62, 0.2)");
         if (hasWarning && !isMinimap) {
           const pulse = (Math.sin(now * 4) + 1) / 2;
           context.strokeStyle = `rgba(224, 85, 69, ${0.3 + pulse * 0.5})`;
