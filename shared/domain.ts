@@ -28,6 +28,7 @@ export interface AgentSnapshot {
   mainBranchRisk: boolean;
   currentAgentMdId: string | null;
   currentSkillMdId: string | null;
+  skillUsageByKind: Record<SkillKind, number>;
   agentMdCallsTotal: number;
   agentMdCallsById: Record<string, number>;
   skillMdCallsTotal: number;

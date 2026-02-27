@@ -96,7 +96,7 @@ function formatTokens(n: number | undefined): string {
 
 export default function SkillFlowPanel({
   agents,
-  skillMetrics,
+  skillMetrics: _skillMetrics,
   filter,
   assets,
   onSelectAgent,
@@ -108,10 +108,6 @@ export default function SkillFlowPanel({
       .sort((a, b) => b.lastEventTs - a.lastEventTs)
       .slice(0, MAX_VISIBLE);
   }, [agents]);
-
-  const skillMap = useMemo(() => {
-    return new Map(skillMetrics.map(s => [s.skill, s]));
-  }, [skillMetrics]);
 
   return (
     <div className="panel-body pipeline-board">
@@ -127,7 +123,7 @@ export default function SkillFlowPanel({
         const selected = filter.selectedAgentId === agent.agentId;
         const skill = agent.currentSkill;
         const gate = agent.currentHookGate;
-        const metric = skill ? skillMap.get(skill) : undefined;
+        const agentSkillCount = skill ? (agent.skillUsageByKind[skill] ?? 0) : 0;
         const teamIcon = iconUrl(assets, teamIconKey(agent));
         const skillIcon = iconUrl(assets, skillIconKey(skill));
         const xp = xpPercent(agent.growthStage);
@@ -176,8 +172,8 @@ export default function SkillFlowPanel({
                 className="pipeline-stage-icon"
               />
               <span className="pipeline-stage-label">{skillLabel(skill)}</span>
-              {metric && metric.usageCount > 0 && (
-                <span className="pipeline-stage-count">{metric.usageCount}</span>
+              {agentSkillCount > 0 && (
+                <span className="pipeline-stage-count">{agentSkillCount}</span>
               )}
             </div>
 

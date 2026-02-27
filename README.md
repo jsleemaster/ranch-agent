@@ -41,6 +41,7 @@ Emoji-first VS Code extension for visualizing multi-agent runtime activity as a 
 - `assets/`: placeholder/user asset packs
 - `config/.agent-teams.json`: 팀/아이콘/색상 매핑 규칙
 - `docs/RUNTIME_TIMING_METRICS.md`: 대기시간/작업완료시간 집계 로직 문서
+- `docs/DEBUGGING.md`: 기타(other) 매핑 분석용 로컬 디버그 로그 가이드
 
 ## Prerequisites
 
@@ -150,6 +151,21 @@ npm run sync:installed
 
 - `excludeAgentIdPattern`으로 본인 에이전트는 위험 카운트에서 제외할 수 있습니다.
 - UI 상단 `메인⚠` 카운터와 에이전트 카드 강조로 즉시 확인할 수 있습니다.
+
+## Unmapped Skill Debug Log (로컬 전용)
+
+`기타(other)` 매핑 원인을 빠르게 개선하려면 아래 디버그 로깅을 켜세요.
+
+```json
+{
+  "expeditionSituationRoom.debug.unmappedSkillLog.enabled": true,
+  "expeditionSituationRoom.debug.unmappedSkillLog.filePath": ".local-debug/unmapped-skill-events.ndjson"
+}
+```
+
+- 기본 파일 경로는 workspace 기준 `.local-debug/unmapped-skill-events.ndjson`
+- `.local-debug/`는 `.gitignore`에 포함되어 공개 저장소에 올라가지 않습니다.
+- 포맷은 NDJSON이며, `toolName`, `eventType`, `reason`, `mappedSkill` 필드로 매핑 누락을 추적할 수 있습니다.
 
 ## Workspace Agent-MD Tracking
 

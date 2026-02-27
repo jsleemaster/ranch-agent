@@ -68,6 +68,16 @@
           "type": "string",
           "default": "",
           "description": "Regex pattern for agent IDs to exclude from main-branch risk alerts (for example, your own coordinator agent)."
+        },
+        "expeditionSituationRoom.debug.unmappedSkillLog.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable local NDJSON logging for events that map to skill 'other' (or have no tool name) to improve skill mapping rules."
+        },
+        "expeditionSituationRoom.debug.unmappedSkillLog.filePath": {
+          "type": "string",
+          "default": ".local-debug/unmapped-skill-events.ndjson",
+          "description": "Where to write unmapped-skill debug logs. Relative paths are resolved from workspace root."
         }
       }
     }

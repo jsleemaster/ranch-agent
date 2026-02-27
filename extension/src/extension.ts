@@ -8,6 +8,11 @@ import { TeamResolver } from "./domain/teamResolver";
 import { AgentMdResolver } from "./agentMdResolver";
 import { SkillMdResolver } from "./skillMdResolver";
 import { loadAssetCatalog, toWebviewAssetCatalog } from "./assetPackLoader";
+import {
+  resolveUnmappedSkillLogPath,
+  type UnmappedSkillLoggerConfig,
+  UnmappedSkillLogger
+} from "./debug/unmappedSkillLogger";
 import { type BranchDetectSettings, GitBranchResolver } from "./gitBranchResolver";
 import { parseWebviewMessage } from "./protocolGuards";
 import { resolveProjectPaths, resolveRuntimeJsonlPath } from "./projectPaths";
@@ -23,6 +28,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private readonly store: SnapshotStore;
   private readonly agentMdResolver: AgentMdResolver;
   private readonly skillMdResolver: SkillMdResolver;
+  private readonly unmappedSkillLogger: UnmappedSkillLogger;
   private readonly branchResolver: GitBranchResolver;
   private readonly runtimeHub: ClaudeJsonlRuntimeHub;
 
@@ -47,6 +53,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     });
     this.agentMdResolver = new AgentMdResolver(this.paths.workspaceRoot);
     this.skillMdResolver = new SkillMdResolver(this.paths.workspaceRoot);
+    this.unmappedSkillLogger = new UnmappedSkillLogger(this.output, this.readUnmappedSkillLoggerConfig());
     this.branchResolver = new GitBranchResolver(this.paths.workspaceRoot, this.readBranchDetectSettings());
 
     this.runtimeHub = new ClaudeJsonlRuntimeHub({
@@ -54,6 +61,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
         const branchEnriched = this.branchResolver.enrich(event);
         const agentEnriched = this.agentMdResolver.enrich(branchEnriched);
         const enrichedEvent = this.skillMdResolver.enrich(agentEnriched);
+        this.unmappedSkillLogger.capture(enrichedEvent);
         const update = this.store.applyRawEvent(enrichedEvent);
         this.enqueueMessage({ type: "agent_upsert", agent: update.agent });
         for (const metric of update.skillMetrics) {
@@ -77,6 +85,12 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
         }
         if (event.affectsConfiguration(`${CONFIG_SECTION}.mainBranchDetect`)) {
           this.branchResolver.updateSettings(this.readBranchDetectSettings());
+        }
+        if (
+          event.affectsConfiguration(`${CONFIG_SECTION}.debug.unmappedSkillLog.enabled`) ||
+          event.affectsConfiguration(`${CONFIG_SECTION}.debug.unmappedSkillLog.filePath`)
+        ) {
+          this.unmappedSkillLogger.updateConfig(this.readUnmappedSkillLoggerConfig());
         }
       })
     );
@@ -204,6 +218,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
 
   dispose(): void {
     this.runtimeHub.stop();
+    this.unmappedSkillLogger.dispose();
     this.output.dispose();
 
     if (this.flushTimer) {
@@ -257,6 +272,17 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
       enabled,
       mainBranchNames: Array.isArray(mainBranchNames) ? mainBranchNames : ["main", "master", "trunk"],
       excludeAgentIdPattern
+    };
+  }
+
+  private readUnmappedSkillLoggerConfig(): UnmappedSkillLoggerConfig {
+    const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+    const enabled = config.get<boolean>("debug.unmappedSkillLog.enabled", false);
+    const configuredPath = config.get<string>("debug.unmappedSkillLog.filePath", "");
+    const filePath = resolveUnmappedSkillLogPath(this.paths.workspaceRoot, configuredPath);
+    return {
+      enabled,
+      filePath
     };
   }
 

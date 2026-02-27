@@ -43,6 +43,38 @@ function growthStageForUsage(usageCount: number): GrowthStage {
   return "seed";
 }
 
+function createEmptySkillUsageByKind(): Record<SkillKind, number> {
+  return {
+    read: 0,
+    edit: 0,
+    write: 0,
+    bash: 0,
+    search: 0,
+    task: 0,
+    ask: 0,
+    other: 0
+  };
+}
+
+function normalizeSkillUsageByKind(
+  raw: Partial<Record<SkillKind, number>> | undefined
+): Record<SkillKind, number> {
+  const next = createEmptySkillUsageByKind();
+  if (!raw) {
+    return next;
+  }
+
+  for (const skill of SKILL_ORDER) {
+    const value = raw[skill];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      continue;
+    }
+    const floored = Math.floor(value);
+    next[skill] = floored > 0 ? floored : 0;
+  }
+  return next;
+}
+
 function normalizeTokenCount(raw: number | undefined): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
     return 0;
@@ -196,6 +228,12 @@ export class SnapshotStore {
     }
 
     const shouldGrow = GROWTH_EVENT_TYPES.has(raw.type);
+    const metricSkill: SkillKind = currentSkill ?? "other";
+    const nextSkillUsageByKind = normalizeSkillUsageByKind(existing?.skillUsageByKind);
+    if (shouldGrow) {
+      nextSkillUsageByKind[metricSkill] += 1;
+    }
+
     const usageCount = (existing?.usageCount ?? 0) + (shouldGrow ? 1 : 0);
     const growthStage = growthStageForUsage(usageCount);
 
@@ -213,6 +251,7 @@ export class SnapshotStore {
       mainBranchRisk,
       currentAgentMdId,
       currentSkillMdId,
+      skillUsageByKind: nextSkillUsageByKind,
       agentMdCallsTotal,
       agentMdCallsById: nextAgentMdCallsById,
       skillMdCallsTotal,
@@ -244,7 +283,6 @@ export class SnapshotStore {
 
     const touchedSkillMetrics: SkillMetricSnapshot[] = [];
     if (shouldGrow) {
-      const metricSkill: SkillKind = currentSkill ?? "other";
       const currentMetric = this.skillMetrics.get(metricSkill) ?? {
         skill: metricSkill,
         usageCount: 0,

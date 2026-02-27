@@ -37,6 +37,37 @@ function asSkillKind(value: unknown): SkillKind | null {
   return null;
 }
 
+function normalizeSkillUsageByKind(value: unknown): Record<SkillKind, number> {
+  const next: Record<SkillKind, number> = {
+    read: 0,
+    edit: 0,
+    write: 0,
+    bash: 0,
+    search: 0,
+    task: 0,
+    ask: 0,
+    other: 0
+  };
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return next;
+  }
+
+  for (const [key, rawCount] of Object.entries(value as Record<string, unknown>)) {
+    const skill = asSkillKind(key);
+    if (!skill) {
+      continue;
+    }
+    if (typeof rawCount !== "number" || !Number.isFinite(rawCount)) {
+      continue;
+    }
+    const floored = Math.floor(rawCount);
+    next[skill] = floored > 0 ? floored : 0;
+  }
+
+  return next;
+}
+
 function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
   const candidate = agent as AgentSnapshot & {
     usageCount?: unknown;
@@ -50,6 +81,7 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
     skillMdCallsById?: unknown;
     currentAgentMdId?: unknown;
     currentSkillMdId?: unknown;
+    skillUsageByKind?: unknown;
   };
   const usageCount = typeof candidate.usageCount === "number" && Number.isFinite(candidate.usageCount) ? candidate.usageCount : 0;
   const branchName = typeof candidate.branchName === "string" && candidate.branchName.trim().length > 0 ? candidate.branchName : null;
@@ -73,6 +105,7 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
       : {};
   const currentAgentMdId = typeof candidate.currentAgentMdId === "string" ? candidate.currentAgentMdId : null;
   const currentSkillMdId = typeof candidate.currentSkillMdId === "string" ? candidate.currentSkillMdId : null;
+  const skillUsageByKind = normalizeSkillUsageByKind(candidate.skillUsageByKind);
   return {
     ...agent,
     branchName,
@@ -80,6 +113,7 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
     mainBranchRisk,
     currentAgentMdId,
     currentSkillMdId,
+    skillUsageByKind,
     agentMdCallsTotal,
     agentMdCallsById,
     skillMdCallsTotal,

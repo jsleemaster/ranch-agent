@@ -148,14 +148,17 @@ describe("SnapshotStore", () => {
 
     const first = store.applyRawEvent(makeEvent("tool_start", { ts: 1, toolName: "Bash" }));
     expect(first.skillMetrics).toEqual([{ skill: "bash", usageCount: 1, growthStage: "seed" }]);
+    expect(first.agent.skillUsageByKind.bash).toBe(1);
 
     for (let i = 2; i <= 5; i += 1) {
       store.applyRawEvent(makeEvent("tool_start", { ts: i, toolName: "Bash" }));
     }
 
     const world = store.getWorldInit();
+    const updatedAgent = world.agents.find((agent) => agent.agentId === "agent-1");
     const bashMetric = world.skills.find((metric) => metric.skill === "bash");
     expect(world.skills).toHaveLength(8);
+    expect(updatedAgent?.skillUsageByKind.bash).toBe(5);
     expect(bashMetric).toEqual({ skill: "bash", usageCount: 5, growthStage: "sprout" });
   });
 
