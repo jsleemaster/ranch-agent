@@ -4,8 +4,8 @@ import * as path from "node:path";
 
 import type { RawRuntimeEvent } from "../../shared/runtime";
 
-const ROOT_CACHE_MS = 15_000;
-const BRANCH_CACHE_MS = 2_000;
+const ROOT_CACHE_MS = 60_000;
+const BRANCH_CACHE_MS = 10_000;
 const DEFAULT_MAIN_BRANCHES = ["main", "master", "trunk"];
 
 export interface BranchDetectSettings {
@@ -61,7 +61,8 @@ export class GitBranchResolver {
 
   enrich(event: RawRuntimeEvent): RawRuntimeEvent {
     const parsedBranch = normalizeBranch(event.branchName);
-    const resolvedBranch = parsedBranch ?? (this.enabled ? this.resolveBranchByEvent(event) : null);
+    const canResolveFromWorkspace = !!(event.filePath || event.workingDir);
+    const resolvedBranch = parsedBranch ?? (this.enabled && canResolveFromWorkspace ? this.resolveBranchByEvent(event) : null);
     if (!this.enabled) {
       return {
         ...event,

@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 import type { RawRuntimeEvent } from "../../shared/runtime";
-import { IDLE_WAIT_MS, INTERNAL_EVENT_LIMIT, WATCHER_POLL_MS, WATCHER_RETRY_MS } from "./constants";
+import { IDLE_WAIT_MS, INTERNAL_EVENT_LIMIT, MAX_POLLED_SOURCES_PER_TICK, WATCHER_POLL_MS, WATCHER_RETRY_MS } from "./constants";
 import { parseClaudeJsonlLine } from "./runtimeParser";
 
 interface RuntimeHubHandlers {
@@ -44,14 +44,20 @@ async function readSlice(filePath: string, offset: number, size: number): Promis
 
 function normalizePaths(filePaths: string[]): string[] {
   const unique = new Set<string>();
+  const ordered: string[] = [];
   for (const filePath of filePaths) {
     const trimmed = filePath.trim();
     if (!trimmed) {
       continue;
     }
-    unique.add(path.resolve(trimmed));
+    const absolute = path.resolve(trimmed);
+    if (unique.has(absolute)) {
+      continue;
+    }
+    unique.add(absolute);
+    ordered.push(absolute);
   }
-  return [...unique].sort((a, b) => a.localeCompare(b));
+  return ordered;
 }
 
 export class ClaudeJsonlRuntimeHub {
@@ -67,6 +73,7 @@ export class ClaudeJsonlRuntimeHub {
   private readonly lastActivityByAgent = new Map<string, number>();
   private readonly idleAgents = new Set<string>();
   private readonly sources = new Map<string, WatchedSource>();
+  private sourceCursor = 0;
 
   constructor(handlers: RuntimeHubHandlers) {
     this.handlers = handlers;
@@ -97,6 +104,7 @@ export class ClaudeJsonlRuntimeHub {
     this.lastActivityByAgent.clear();
     this.idleAgents.clear();
     this.sources.clear();
+    this.sourceCursor = 0;
 
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
@@ -161,12 +169,25 @@ export class ClaudeJsonlRuntimeHub {
 
     this.pollInFlight = true;
     try {
-      for (const source of sources) {
-        await this.pollSource(source);
-      }
+      const targets = this.pickSourcesForTick(sources);
+      await Promise.all(targets.map((source) => this.pollSource(source)));
     } finally {
       this.pollInFlight = false;
     }
+  }
+
+  private pickSourcesForTick(sources: WatchedSource[]): WatchedSource[] {
+    if (sources.length <= MAX_POLLED_SOURCES_PER_TICK) {
+      return sources;
+    }
+
+    const selected: WatchedSource[] = [];
+    const start = this.sourceCursor % sources.length;
+    for (let index = 0; index < MAX_POLLED_SOURCES_PER_TICK; index += 1) {
+      selected.push(sources[(start + index) % sources.length]);
+    }
+    this.sourceCursor = (start + MAX_POLLED_SOURCES_PER_TICK) % sources.length;
+    return selected;
   }
 
   private async pollSource(source: WatchedSource): Promise<void> {

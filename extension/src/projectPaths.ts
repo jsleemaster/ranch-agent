@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { CONFIG_SECTION } from "./constants";
+import { AUTO_SCAN_ACTIVE_WINDOW_MS, CONFIG_SECTION, MAX_WATCH_JSONL_FILES } from "./constants";
 
 export interface ProjectPaths {
   projectRoot: string;
@@ -140,6 +140,71 @@ export function getClaudeProjectDir(workspaceRoot: string): string {
   return candidates[0] ?? path.join(CLAUDE_PROJECTS_DIR, normalizeClaudeProjectDirNameStrict(workspaceRoot));
 }
 
+interface JsonlEntry {
+  filePath: string;
+  mtimeMs: number;
+}
+
+interface AutoScanCacheEntry {
+  signature: string;
+  paths: string[];
+}
+
+const autoScanCache = new Map<string, AutoScanCacheEntry>();
+
+function statSignature(filePath: string): string {
+  try {
+    const stat = fs.statSync(filePath);
+    return `${Math.floor(stat.mtimeMs)}:${stat.size}`;
+  } catch {
+    return "0:0";
+  }
+}
+
+function computeAutoScanSignature(projectDir: string): string {
+  if (!fs.existsSync(projectDir)) {
+    return "missing";
+  }
+
+  const parts = [`root:${statSignature(projectDir)}`];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(projectDir, { withFileTypes: true });
+  } catch {
+    return "unreadable";
+  }
+
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    const absolutePath = path.join(projectDir, entry.name);
+    if (entry.isFile() && entry.name.toLowerCase().endsWith(".jsonl")) {
+      parts.push(`f:${entry.name}:${statSignature(absolutePath)}`);
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      parts.push(`d:${entry.name}:${statSignature(absolutePath)}`);
+      const subagentsDir = path.join(absolutePath, "subagents");
+      if (fs.existsSync(subagentsDir) && fs.statSync(subagentsDir).isDirectory()) {
+        parts.push(`s:${entry.name}:${statSignature(subagentsDir)}`);
+      }
+    }
+  }
+
+  return parts.join("|");
+}
+
+function selectWatchTargets(entries: JsonlEntry[]): string[] {
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const now = Date.now();
+  const fresh = entries.filter((entry) => now - entry.mtimeMs <= AUTO_SCAN_ACTIVE_WINDOW_MS);
+  const source = fresh.length > 0 ? fresh : entries.slice(0, 1);
+  return source.slice(0, MAX_WATCH_JSONL_FILES).map((entry) => entry.filePath);
+}
+
 function findJsonlPaths(projectDir: string): string[] {
   if (!fs.existsSync(projectDir)) {
     return [];
@@ -175,7 +240,7 @@ function findJsonlPaths(projectDir: string): string[] {
     }
   }
 
-  return jsonlPaths
+  const entries = jsonlPaths
     .map((filePath) => {
       try {
         const stat = fs.statSync(filePath);
@@ -188,8 +253,9 @@ function findJsonlPaths(projectDir: string): string[] {
       }
     })
     .filter((entry): entry is { filePath: string; mtimeMs: number } => !!entry)
-    .sort((a, b) => (b.mtimeMs !== a.mtimeMs ? b.mtimeMs - a.mtimeMs : a.filePath.localeCompare(b.filePath)))
-    .map((entry) => entry.filePath);
+    .sort((a, b) => (b.mtimeMs !== a.mtimeMs ? b.mtimeMs - a.mtimeMs : a.filePath.localeCompare(b.filePath)));
+
+  return selectWatchTargets(entries);
 }
 
 export function resolveRuntimeJsonlPath(workspaceRoot: string): RuntimePathResolution {
@@ -213,9 +279,21 @@ export function resolveRuntimeJsonlPath(workspaceRoot: string): RuntimePathResol
   }
 
   const scanDir = getClaudeProjectDir(workspaceRoot);
+  const signature = computeAutoScanSignature(scanDir);
+  const cached = autoScanCache.get(scanDir);
+  if (cached && cached.signature === signature) {
+    return {
+      source: "auto",
+      paths: cached.paths,
+      scanDir
+    };
+  }
+
+  const paths = findJsonlPaths(scanDir);
+  autoScanCache.set(scanDir, { signature, paths });
   return {
     source: "auto",
-    paths: findJsonlPaths(scanDir),
+    paths,
     scanDir
   };
 }
