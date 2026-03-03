@@ -18,7 +18,7 @@ const SKILL_ORDER: SkillKind[] = ["read", "edit", "write", "bash", "search", "ta
 const GROWTH_EVENT_TYPES = new Set<RawRuntimeEvent["type"]>(["tool_start", "tool_done", "assistant_text"]);
 const MAX_PENDING_TOOL_STARTS = 256;
 const GROWTH_LEVEL_SPAN = 35;
-const STALE_AGENT_RETENTION_MS = 3 * 60 * 1000;
+const STALE_AGENT_RETENTION_MS = 60 * 1000;
 const COMPLETED_AGENT_IDLE_MS = 30 * 1000;
 
 type WaitKind = "permission" | "turn";

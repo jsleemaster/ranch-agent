@@ -174,6 +174,7 @@ export default function FolderMapPanel({
       }
 
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.imageSmoothingEnabled = !isMinimap;
       context.clearRect(0, 0, wWidth, wHeight);
 
       const zoneCount = activeZones.length;
@@ -205,14 +206,16 @@ export default function FolderMapPanel({
         zoneRectsRef.current.push({ zoneId: zone.zoneId, x, y, w, h });
 
         const isSelected = activeFilter.selectedZoneId === zone.zoneId;
-        const zoneAgents = activeAgents.filter(a => a.currentZoneId === zone.zoneId);
+        const zoneAgents = isMinimap && zone.zoneId === "ranch-main"
+          ? activeAgents
+          : activeAgents.filter((a) => (a.currentZoneId ?? "ranch-main") === zone.zoneId);
         const zoneFeed = zoneAgents.reduce((s, a) => s + (a.totalTokensTotal ?? 0), 0);
         const hasWarning = zoneAgents.some(a => a.currentHookGate === "failed");
         const isEmpty = zoneAgents.length === 0;
 
         // Tile background
         if (isMinimap) {
-            context.fillStyle = isSelected ? "rgba(212, 134, 11, 0.25)" : "rgba(0, 0, 0, 0.45)";
+            context.fillStyle = isSelected ? "rgba(212, 134, 11, 0.28)" : "rgba(28, 19, 10, 0.92)";
         } else {
             context.fillStyle = isSelected ? "rgba(74, 52, 34, 0.4)" : "rgba(30, 24, 15, 0.3)";
         }
@@ -294,8 +297,8 @@ export default function FolderMapPanel({
           pos.y += (basePosY - pos.y) * 0.1;
           positionRef.current.set(agent.agentId, pos);
 
-          const bounce = Math.sin(now * 5 + seedFromAgent(agent.agentId)) * 2;
-          const size = isMinimap ? 14 : 20;
+          const bounce = isMinimap ? 0 : Math.sin(now * 5 + seedFromAgent(agent.agentId)) * 2;
+          const size = isMinimap ? 18 : 20;
 
           drawQueue.push({
             agent, x: pos.x - size / 2, y: pos.y - size / 2 + bounce,
@@ -321,11 +324,29 @@ export default function FolderMapPanel({
         const sprite = (spriteUrlStr ? getImage(imageCacheRef.current, spriteUrlStr) : null) ||
                        (iconUrlStr ? getImage(imageCacheRef.current, iconUrlStr) : null);
 
-        if (sprite) {
+        const canDrawSprite = !!(sprite && sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0);
+        if (canDrawSprite && sprite) {
           context.drawImage(sprite, x, y, size, size);
         } else {
-          context.fillStyle = agent.state === "active" ? "#7CC66E" : agent.state === "completed" ? "#8FA2B5" : "#A89478";
-          context.beginPath(); context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2); context.fill();
+          const fillColor = agent.state === "active"
+            ? "#7CC66E"
+            : agent.state === "completed"
+              ? "#8FA2B5"
+              : (isMinimap ? "#D1BE95" : "#A89478");
+          context.fillStyle = fillColor;
+          context.beginPath();
+          context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+          context.fill();
+
+          // Fallback mark so minimap remains visible even if sprites fail to load.
+          context.strokeStyle = isMinimap ? "rgba(255, 244, 220, 0.55)" : "rgba(20, 16, 12, 0.8)";
+          context.lineWidth = 1;
+          context.stroke();
+          context.font = isMinimap ? "10px sans-serif" : "12px sans-serif";
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillStyle = "#1f150c";
+          context.fillText(teamEmoji(agent), x + size / 2, y + size / 2 + 0.5);
         }
 
         const aura = gateAura(agent.currentHookGate);
@@ -335,6 +356,14 @@ export default function FolderMapPanel({
         }
       }
       context.globalAlpha = 1;
+
+      if (isMinimap && drawQueue.length === 0) {
+        context.fillStyle = "rgba(180, 160, 130, 0.7)";
+        context.font = "11px 'JetBrains Mono', monospace";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText("에이전트 대기 중", wWidth / 2, wHeight / 2);
+      }
       animationFrame = window.requestAnimationFrame(render);
     };
 

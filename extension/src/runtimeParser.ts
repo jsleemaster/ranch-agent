@@ -493,9 +493,7 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
       "agent_id",
       "sessionId",
       "session_id",
-      "conversation_id",
-      "requestId",
-      "request_id"
+      "conversation_id"
     ]) ??
     options.fallbackAgentRuntimeId;
 

@@ -162,4 +162,16 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed?.completionTokens).toBe(19);
     expect(parsed?.totalTokens).toBe(96);
   });
+
+  it("ignores request_id as runtime identity and falls back", () => {
+    const line = JSON.stringify({
+      type: "assistant_text",
+      request_id: "req-123",
+      message: "hello"
+    });
+
+    const parsed = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: "file-stable-id" });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.agentRuntimeId).toBe("file-stable-id");
+  });
 });

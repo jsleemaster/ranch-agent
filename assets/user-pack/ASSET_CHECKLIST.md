@@ -43,3 +43,4 @@ Drop your own assets here. Runtime fallback order is:
 1. Replace file paths in `manifest.json` if your names differ.
 2. Put PNG/SVG files into matching folders. You can point multiple keys to a single file.
 3. Re-run extension host (`F5`) or reload window.
+4. If you generate images with GPT, start from `PROMPT_TEMPLATE.md`.

@@ -1,6 +1,7 @@
 import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 
 import type { RawRuntimeEvent } from "../../shared/runtime";
 import { IDLE_WAIT_MS, INTERNAL_EVENT_LIMIT, MAX_POLLED_SOURCES_PER_TICK, WATCHER_POLL_MS, WATCHER_RETRY_MS } from "./constants";
@@ -58,6 +59,18 @@ function normalizePaths(filePaths: string[]): string[] {
     ordered.push(absolute);
   }
   return ordered;
+}
+
+export function stableAgentRuntimeIdForSource(filePath: string): string {
+  const base = path
+    .basename(filePath)
+    .replace(/\.jsonl$/i, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  const normalizedBase = base.length > 0 ? base : "agent";
+  const suffix = createHash("sha1").update(path.resolve(filePath)).digest("hex").slice(0, 6);
+  return `${normalizedBase}-${suffix}`;
 }
 
 export class ClaudeJsonlRuntimeHub {
@@ -231,7 +244,7 @@ export class ClaudeJsonlRuntimeHub {
     const lines = merged.split(/\r?\n/);
     source.remainder = lines.pop() ?? "";
 
-    const fallbackAgentId = path.basename(source.filePath).replace(/\.jsonl$/i, "") || "agent";
+    const fallbackAgentId = stableAgentRuntimeIdForSource(source.filePath);
 
     for (const line of lines) {
       const event = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: fallbackAgentId });
@@ -241,6 +254,8 @@ export class ClaudeJsonlRuntimeHub {
 
       const sourceEvent = {
         ...event,
+        // Keep runtime identity stable per JSONL file to avoid request/session key churn.
+        agentRuntimeId: fallbackAgentId,
         sourcePath: source.filePath
       };
 

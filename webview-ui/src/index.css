@@ -668,10 +668,9 @@ body {
   position: absolute;
   bottom: 12px;
   right: 12px;
-  width: 220px;
-  height: 160px;
-  background: rgba(45, 34, 25, 0.7);
-  backdrop-filter: blur(8px);
+  width: 280px;
+  height: 200px;
+  background: rgba(22, 14, 8, 0.96);
   border: 1px solid rgba(212, 134, 11, 0.3);
   border-radius: 10px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 134, 11, 0.1);
@@ -684,7 +683,7 @@ body {
 }
 
 .ranch-minimap-wrap:hover {
-  background: rgba(55, 42, 32, 0.85);
+  background: rgba(30, 20, 10, 0.98);
   border-color: rgba(212, 134, 11, 0.6);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 30px rgba(212, 134, 11, 0.15);
 }
@@ -707,13 +706,14 @@ body {
   gap: 0 !important;
   display: flex !important;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.3); /* Darker base */
+  background: rgba(14, 10, 6, 0.95);
 }
 
 .minimap-mode .zone-canvas {
   height: 100% !important;
   border: none !important;
   background: transparent !important;
+  image-rendering: crisp-edges;
 }
 
 /* ═══════════════════════════ Ranch Map ═══════════════════════════ */
@@ -1954,7 +1954,7 @@ span.pipeline-avatar-icon {
 
 /* ═══════════════════════════ responsive ═══════════════════════════ */
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .hud-bar {
     width: 100%;
     justify-self: stretch;
@@ -1963,25 +1963,51 @@ span.pipeline-avatar-icon {
   }
 
   .panel-grid {
+    grid-template-columns: 280px 1fr;
+    gap: 8px;
+  }
+
+  .agent-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    grid-auto-rows: minmax(124px, auto);
+    gap: 8px;
+  }
+
+  .ranch-minimap-wrap {
+    width: 230px;
+    height: 165px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .panel-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(4, minmax(180px, 1fr));
   }
 
-  .panel-feed {
-    height: min(220px, 32vh);
+  .left-sidebar-col,
+  .right-content-col {
+    gap: 8px;
   }
 
-  .panel-grid::before,
-  .panel-grid::after {
-    display: none;
+  .ranch-minimap-wrap {
+    position: static;
+    width: 100%;
+    height: 180px;
+    margin-top: 8px;
   }
 
-  .zone-canvas {
-    min-height: 220px;
+  .panel-flow {
+    display: flex;
+    flex-direction: column;
   }
 
-  .feed-row {
-    grid-template-columns: auto auto auto auto auto auto auto;
+  .pipeline-board {
+    min-height: 160px;
   }
 
   .feed-detail {
