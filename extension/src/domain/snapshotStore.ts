@@ -2,7 +2,6 @@ import type {
   AgentSnapshot,
   AgentRuntimeRole,
   FeedEvent,
-  FilterState,
   GrowthStage,
   SkillKind,
   SkillMetricSnapshot,
@@ -157,12 +156,6 @@ export class SnapshotStore {
 
   private sequence = 0;
 
-  private filterState: FilterState = {
-    selectedAgentId: null,
-    selectedSkill: null,
-    selectedZoneId: null
-  };
-
   constructor(deps: SnapshotDependencies) {
     this.teamResolver = deps.teamResolver;
 
@@ -190,7 +183,11 @@ export class SnapshotStore {
     const currentSkill: SkillKind | null = nextSkill ?? existing?.currentSkill ?? null;
     const runtimeRole = deriveRuntimeRole(raw, existing?.runtimeRole);
     const currentHookGate = nextGate ?? existing?.currentHookGate ?? null;
-    const currentState = nextState ?? (existing?.state === "completed" ? "waiting" : existing?.state ?? "waiting");
+    const hasPendingToolBeforeEvent = (this.pendingToolStartsByAgent.get(raw.agentRuntimeId)?.length ?? 0) > 0;
+    const shouldIgnoreTurnWaiting = raw.type === "turn_waiting" && hasPendingToolBeforeEvent;
+    const currentState = shouldIgnoreTurnWaiting
+      ? (existing?.state === "completed" ? "active" : existing?.state ?? "active")
+      : (nextState ?? (existing?.state === "completed" ? "waiting" : existing?.state ?? "waiting"));
     const branchName = raw.branchName ?? existing?.branchName ?? null;
     const isMainBranch = raw.isMainBranch ?? existing?.isMainBranch ?? false;
     const mainBranchRisk = raw.mainBranchRisk ?? existing?.mainBranchRisk ?? false;
@@ -406,19 +403,6 @@ export class SnapshotStore {
     return [...this.feed];
   }
 
-  getFilterState(): FilterState {
-    return { ...this.filterState };
-  }
-
-  setFilterState(next: Partial<FilterState>): FilterState {
-    this.filterState = {
-      ...this.filterState,
-      ...next,
-      selectedZoneId: null
-    };
-    return this.getFilterState();
-  }
-
   private consumePendingWait(agentRuntimeId: string, endTs: number): { durationMs: number; kind: WaitKind } | null {
     const waiting = this.pendingWaitByAgent.get(agentRuntimeId);
     if (!waiting) {
@@ -499,10 +483,6 @@ export class SnapshotStore {
       this.agents.delete(agentId);
       this.pendingWaitByAgent.delete(agentId);
       this.pendingToolStartsByAgent.delete(agentId);
-    }
-
-    if (this.filterState.selectedAgentId && !this.agents.has(this.filterState.selectedAgentId)) {
-      this.filterState.selectedAgentId = null;
     }
   }
 

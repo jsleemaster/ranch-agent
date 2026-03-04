@@ -77,7 +77,16 @@
         "expeditionSituationRoom.debug.unmappedSkillLog.filePath": {
           "type": "string",
           "default": ".local-debug/unmapped-skill-events.ndjson",
-          "description": "Where to write unmapped-skill debug logs. Relative paths are resolved from workspace root."
+          "description": "Where to write unmapped-skill debug logs. Absolute paths are used as-is. Relative paths resolve from the base set by debug.unmappedSkillLog.relativeBase."
+        },
+        "expeditionSituationRoom.debug.unmappedSkillLog.relativeBase": {
+          "type": "string",
+          "enum": [
+            "global",
+            "workspace"
+          ],
+          "default": "global",
+          "description": "Base directory for relative debug.unmappedSkillLog.filePath. 'global' stores logs in extension global storage; 'workspace' stores logs in the opened project."
         }
       }
     }

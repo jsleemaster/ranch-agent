@@ -98,9 +98,16 @@ Manual mode:
 ```json
 {
   "expeditionSituationRoom.debug.unmappedSkillLog.enabled": true,
-  "expeditionSituationRoom.debug.unmappedSkillLog.filePath": ".local-debug/unmapped-skill-events.ndjson"
+  "expeditionSituationRoom.debug.unmappedSkillLog.filePath": ".local-debug/unmapped-skill-events.ndjson",
+  "expeditionSituationRoom.debug.unmappedSkillLog.relativeBase": "global"
 }
 ```
+
+- `relativeBase: "global"` (default): write relative log paths under extension global storage (recommended; avoids project folder noise).
+  - macOS example: `~/Library/Application Support/Code/User/globalStorage/local.ranch-agent-extension/.local-debug/unmapped-skill-events.ndjson`
+- `relativeBase: "workspace"`: write relative log paths under the opened workspace root.
+- Absolute `filePath` (or `~/...`) always writes exactly to that location.
+- Log file is created only when `expeditionSituationRoom.debug.unmappedSkillLog.enabled` is `true`.
 
 ## Development
 

@@ -85,6 +85,7 @@ export class ClaudeJsonlRuntimeHub {
   private readonly eventBuffer: RawRuntimeEvent[] = [];
   private readonly lastActivityByAgent = new Map<string, number>();
   private readonly idleAgents = new Set<string>();
+  private readonly toolInFlightByAgent = new Map<string, number>();
   private readonly sources = new Map<string, WatchedSource>();
   private sourceCursor = 0;
 
@@ -116,6 +117,7 @@ export class ClaudeJsonlRuntimeHub {
 
     this.lastActivityByAgent.clear();
     this.idleAgents.clear();
+    this.toolInFlightByAgent.clear();
     this.sources.clear();
     this.sourceCursor = 0;
 
@@ -261,6 +263,19 @@ export class ClaudeJsonlRuntimeHub {
 
       this.registerActivity(sourceEvent.agentRuntimeId, sourceEvent.ts, sourceEvent.type);
 
+      if (sourceEvent.type === "tool_start") {
+        const current = this.toolInFlightByAgent.get(sourceEvent.agentRuntimeId) ?? 0;
+        this.toolInFlightByAgent.set(sourceEvent.agentRuntimeId, current + 1);
+      } else if (sourceEvent.type === "tool_done") {
+        const current = this.toolInFlightByAgent.get(sourceEvent.agentRuntimeId) ?? 0;
+        const next = Math.max(0, current - 1);
+        if (next === 0) {
+          this.toolInFlightByAgent.delete(sourceEvent.agentRuntimeId);
+        } else {
+          this.toolInFlightByAgent.set(sourceEvent.agentRuntimeId, next);
+        }
+      }
+
       if (sourceEvent.type === "turn_waiting") {
         this.idleAgents.add(sourceEvent.agentRuntimeId);
       }
@@ -295,6 +310,9 @@ export class ClaudeJsonlRuntimeHub {
 
     const now = Date.now();
     for (const [agentRuntimeId, lastTs] of this.lastActivityByAgent.entries()) {
+      if ((this.toolInFlightByAgent.get(agentRuntimeId) ?? 0) > 0) {
+        continue;
+      }
       if (now - lastTs >= IDLE_WAIT_MS && !this.idleAgents.has(agentRuntimeId)) {
         this.idleAgents.add(agentRuntimeId);
         this.pushEvent({

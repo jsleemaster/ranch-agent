@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import * as os from "node:os";
 
 import { describe, expect, it } from "vitest";
 
@@ -42,9 +43,21 @@ describe("resolveUnmappedSkillLogPath", () => {
     expect(resolved).toBe(path.resolve("/repo/workspace", ".local-debug/custom.ndjson"));
   });
 
+  it("resolves relative paths against global root when configured", () => {
+    const resolved = resolveUnmappedSkillLogPath("/repo/workspace", ".local-debug/custom.ndjson", {
+      globalRoot: "/var/global-store/ranch-agent",
+      relativeBase: "global"
+    });
+    expect(resolved).toBe(path.resolve("/var/global-store/ranch-agent", ".local-debug/custom.ndjson"));
+  });
+
   it("keeps absolute paths as-is", () => {
     const resolved = resolveUnmappedSkillLogPath("/repo/workspace", "/tmp/unmapped.ndjson");
     expect(resolved).toBe("/tmp/unmapped.ndjson");
   });
-});
 
+  it("expands home-prefixed paths", () => {
+    const resolved = resolveUnmappedSkillLogPath("/repo/workspace", "~/.ranch-agent/unmapped.ndjson");
+    expect(resolved).toBe(path.join(os.homedir(), ".ranch-agent/unmapped.ndjson"));
+  });
+});

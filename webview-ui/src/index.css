@@ -174,7 +174,7 @@ body {
   position: relative;
   display: grid;
   gap: 12px;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: clamp(360px, 30vw, 460px) minmax(0, 1fr);
   grid-template-rows: 1fr;
   height: 100%;
   min-height: 0;
@@ -341,10 +341,11 @@ body {
 
 .agent-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-  grid-auto-rows: minmax(132px, auto);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+  grid-auto-rows: minmax(170px, auto);
+  gap: 12px;
   padding: 14px; /* Roomy as requested */
+  align-content: start;
 }
 
 /* ── agent-md chips (ranch tag style) ── */
@@ -385,18 +386,18 @@ body {
 .agent-card {
   position: relative;
   border: 2px solid rgba(120, 85, 50, 0.45);
-  border-radius: 10px;
+  border-radius: 12px;
   background:
     linear-gradient(155deg, rgba(74, 52, 34, 0.75), rgba(30, 20, 10, 0.8));
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 8px;
-  padding: 8px;
+  gap: 10px;
+  padding: 10px;
   cursor: pointer;
   transition: all 200ms ease;
-  min-height: 140px;
+  min-height: 170px;
   height: 100%;
 }
 
@@ -487,7 +488,7 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  min-height: 16px;
+  min-height: 22px;
 }
 
 .agent-card-top-right {
@@ -498,13 +499,13 @@ body {
 
 .agent-role-badge {
   position: static;
-  height: 14px;
-  padding: 0 5px;
+  height: 18px;
+  padding: 0 7px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  font-size: 9px;
+  gap: 4px;
+  font-size: 11px;
   font-family: var(--font-code);
   border: 1px solid rgba(120, 85, 50, 0.6);
   background: rgba(26, 16, 8, 0.82);
@@ -531,15 +532,15 @@ body {
 .agent-complete-badge {
   position: static;
   align-self: flex-start;
-  height: 14px;
-  padding: 0 5px;
+  height: 18px;
+  padding: 0 7px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   border: 1px solid rgba(150, 168, 188, 0.65);
   background: rgba(23, 30, 38, 0.9);
   color: #c7d8ea;
-  font-size: 9px;
+  font-size: 11px;
   font-family: var(--font-code);
   letter-spacing: 0.04em;
   z-index: 5;
@@ -550,8 +551,8 @@ body {
 
 .state-ring {
   position: static;
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -575,12 +576,6 @@ body {
 
 /* ── agent icons ── */
 
-.agent-main-icon {
-  width: 42px;
-  height: 42px;
-  margin: 2px auto 0;
-}
-
 .agent-meta-icons {
   display: flex;
   gap: 4px;
@@ -592,13 +587,13 @@ body {
   justify-content: center;
   position: static;
   z-index: 5;
-  padding: 1px 7px;
+  padding: 2px 9px;
   border-radius: 999px;
   border: 1px solid rgba(120, 85, 50, 0.6);
   background: rgba(26, 16, 8, 0.9);
   color: var(--cream);
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -615,8 +610,8 @@ body {
   flex: 1;
   min-width: 0;
   max-width: none;
-  padding: 1px 5px;
-  border-radius: 6px;
+  padding: 2px 6px;
+  border-radius: 8px;
   border: 1px solid rgba(120, 85, 50, 0.45);
   background: rgba(26, 16, 8, 0.82);
   pointer-events: none;
@@ -628,7 +623,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 9px;
+  font-size: 11px;
   font-family: var(--font-code);
   color: var(--cream-dim);
   font-variant-numeric: tabular-nums;
@@ -637,8 +632,18 @@ body {
 .icon-token {
   width: 18px;
   height: 18px;
-  object-fit: contain;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.icon-token-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .mini-icon {
@@ -646,19 +651,35 @@ body {
   height: 18px;
 }
 
-.icon-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* Keep the worker card avatar larger than row avatars. */
+.icon-token.agent-main-icon {
+  width: 80px !important;
+  height: 80px !important;
+  margin: 8px auto 0;
+  border-radius: 12px;
+}
+
+/* Never over-scale worker card avatars even if stale inline transforms exist. */
+.icon-token.agent-main-icon .icon-token-image {
+  transform: none !important;
+  object-fit: contain !important;
+  object-position: center !important;
+}
+
+.icon-token.icon-fallback {
   background: rgba(74, 52, 34, 0.7);
   color: var(--cream);
-  font-size: 14px;
   line-height: 1;
   border-radius: 4px;
 }
 
-.agent-main-icon.icon-fallback {
-  font-size: 24px;
+.icon-fallback-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.agent-main-icon.icon-fallback .icon-fallback-glyph {
+  font-size: 42px;
   border-radius: 8px;
 }
 
@@ -820,7 +841,7 @@ body {
   gap: 8px;
   padding: 6px 10px;
   background: rgba(26, 16, 8, 0.7);
-  border: 1px solid rgba(139, 107, 62, 0.2);
+  border: 1px solid rgba(139, 107, 62, 0.58);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -829,7 +850,7 @@ body {
 
 .pipeline-row:hover {
   background: rgba(52, 36, 20, 0.8);
-  border-color: rgba(139, 107, 62, 0.4);
+  border-color: rgba(212, 165, 60, 0.72);
 }
 
 .pipeline-row.selected {
@@ -839,40 +860,48 @@ body {
 }
 
 .pipeline-row.active {
+  border-color: rgba(124, 198, 110, 0.78);
   border-left: 3px solid var(--good);
+  box-shadow: inset 0 0 0 1px rgba(124, 198, 110, 0.16);
 }
 
 .pipeline-row.waiting {
+  border-color: rgba(189, 162, 123, 0.7);
   border-left: 3px solid var(--text-dim);
+  box-shadow: inset 0 0 0 1px rgba(189, 162, 123, 0.12);
 }
 
 .pipeline-row.completed {
+  border-color: rgba(160, 176, 194, 0.72);
   border-left: 3px solid rgba(150, 168, 188, 0.75);
   background: rgba(32, 38, 45, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(160, 176, 194, 0.14);
 }
 
 /* ── avatar ── */
 .pipeline-avatar {
   position: relative;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
 }
 
 .pipeline-avatar-icon {
-  width: 34px !important;
-  height: 34px !important;
+  width: 44px !important;
+  height: 44px !important;
   border-radius: 50%;
   border: 2px solid rgba(139, 107, 62, 0.4);
-  object-fit: cover;
 }
 
-span.pipeline-avatar-icon {
+span.pipeline-avatar-icon.icon-fallback {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
   background: rgba(30, 26, 22, 0.9);
+}
+
+span.pipeline-avatar-icon.icon-fallback .icon-fallback-glyph {
+  font-size: 22px;
 }
 
 .pipeline-pulse {
@@ -1033,9 +1062,14 @@ span.pipeline-avatar-icon {
 }
 
 .pipeline-stage-icon {
-  width: 18px !important;
-  height: 18px !important;
+  width: 22px !important;
+  height: 22px !important;
   font-size: 14px !important;
+}
+
+.icon-token.icon-image.pipeline-stage-icon .icon-token-image {
+  transform: scale(1.25);
+  transform-origin: center;
 }
 
 .pipeline-stage-label {
@@ -1281,14 +1315,14 @@ span.pipeline-avatar-icon {
 /* ── agent card token badge ── */
 .agent-token-badge {
   position: static;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   font-family: var(--font-code);
   color: var(--sunset-gold);
   background: rgba(74, 52, 34, 0.85);
   border: 1px solid rgba(212, 165, 60, 0.3);
-  border-radius: 4px;
-  padding: 1px 4px;
+  border-radius: 6px;
+  padding: 2px 6px;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -1296,10 +1330,10 @@ span.pipeline-avatar-icon {
 .agent-card-bottom {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 8px;
   margin-top: auto;
-  min-height: 18px;
+  min-height: 24px;
 }
 
 
@@ -1319,17 +1353,20 @@ span.pipeline-avatar-icon {
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(139, 107, 62, 0.2);
   z-index: 20;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .tab-btn {
-  flex: 1;
-  padding: 8px 12px;
+  flex: 1 1 0;
+  min-width: 112px;
+  padding: 10px 12px;
   background: rgba(20, 16, 12, 0.7);
   border: 1px solid rgba(139, 107, 62, 0.25);
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   color: #a89274;
-  font-size: 13px;
+  font-size: 14px;
   font-family: var(--font-fancy);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1338,6 +1375,8 @@ span.pipeline-avatar-icon {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab-btn:hover {
@@ -1920,6 +1959,132 @@ span.pipeline-avatar-icon {
   color: var(--text-bright);
 }
 
+/* ═══════════════════════════ Typography Upscale ═══════════════════════════ */
+
+body {
+  font-size: 15px;
+}
+
+.hud-pill {
+  font-size: 14px;
+}
+
+.panel-label {
+  font-size: 15px;
+}
+
+.panel-expand-btn {
+  font-size: 13px;
+}
+
+.tab-btn {
+  font-size: 16px;
+}
+
+.agent-level-badge {
+  font-size: 14px;
+}
+
+.agent-role-badge,
+.agent-complete-badge {
+  font-size: 12px;
+}
+
+.agent-xp-text {
+  font-size: 12px;
+}
+
+.agent-token-badge {
+  font-size: 14px;
+}
+
+.md-section-label {
+  font-size: 14px;
+}
+
+.ranking-title {
+  font-size: 12px;
+}
+
+.ranking-item {
+  font-size: 13px;
+}
+
+.ranking-name,
+.ranking-value {
+  font-size: 13px;
+}
+
+.pipeline-name {
+  font-size: 13px;
+}
+
+.pipeline-role,
+.pipeline-status,
+.pipeline-xp-label {
+  font-size: 10px;
+}
+
+.pipeline-stage-label,
+.pipeline-gate-label {
+  font-size: 13px;
+}
+
+.pipeline-stage-count {
+  font-size: 12px;
+}
+
+.pipeline-zone-label,
+.pipeline-stat {
+  font-size: 11px;
+}
+
+.pipeline-stat-icon,
+.pipeline-stat-label {
+  font-size: 11px;
+}
+
+.token-total {
+  font-size: 12px;
+}
+
+.flow-note,
+.canvas-note {
+  font-size: 14px;
+}
+
+.feed-row {
+  height: 32px;
+}
+
+.feed-time,
+.feed-code,
+.feed-agent,
+.feed-detail,
+.feed-growth {
+  font-size: 12px;
+}
+
+.activity-bar-label,
+.activity-bar-empty,
+.activity-chip,
+.activity-bar-expand {
+  font-size: 13px;
+}
+
+.activity-chip-time,
+.activity-chip-status {
+  font-size: 11px;
+}
+
+.feed-modal-title {
+  font-size: 15px;
+}
+
+.feed-modal-close {
+  font-size: 13px;
+}
+
 /* ═══════════════════════════ panel enter animation ═══════════════════════════ */
 
 .enter-a,
@@ -1963,14 +2128,14 @@ span.pipeline-avatar-icon {
   }
 
   .panel-grid {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: clamp(320px, 36vw, 420px) minmax(0, 1fr);
     gap: 8px;
   }
 
   .agent-cards-grid {
-    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-    grid-auto-rows: minmax(124px, auto);
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    grid-auto-rows: minmax(154px, auto);
+    gap: 10px;
   }
 
   .ranch-minimap-wrap {

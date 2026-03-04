@@ -1,10 +1,9 @@
 import React, { useMemo } from "react";
 
 import type { WebviewAssetCatalog } from "@shared/assets";
-import type { AgentSnapshot, FilterState, SkillKind, SkillMetricSnapshot } from "@shared/domain";
+import type { AgentSnapshot, SkillMetricSnapshot } from "@shared/domain";
 import {
   agentAvatarEmoji,
-  gateEmoji,
   iconUrl,
   skillEmoji,
   skillIconKey,
@@ -16,10 +15,7 @@ import IconToken from "./IconToken";
 interface SkillFlowPanelProps {
   agents: AgentSnapshot[];
   skillMetrics: SkillMetricSnapshot[];
-  filter: FilterState;
   assets: WebviewAssetCatalog;
-  onSelectAgent: (agentId: string | null) => void;
-  onSelectSkill: (skill: SkillKind | null) => void;
 }
 
 const MAX_VISIBLE = 12;
@@ -34,12 +30,15 @@ function gateStatusClass(gate: AgentSnapshot["currentHookGate"]): string {
   }
 }
 
-export function gateStatusLabel(gate: AgentSnapshot["currentHookGate"]): string {
+export function gateStatusLabel(
+  gate: AgentSnapshot["currentHookGate"],
+  agentState?: AgentSnapshot["state"]
+): string {
   switch (gate) {
-    case "open": return "통과";
-    case "blocked": return "대기";
+    case "open": return "진행";
+    case "blocked": return "승인대기";
     case "failed": return "실패";
-    case "closed": return "완료";
+    case "closed": return agentState === "completed" ? "종료" : "대기";
     default: return "대기";
   }
 }
@@ -97,10 +96,7 @@ function xpPercent(growthLevelUsage: number): number {
 export default function SkillFlowPanel({
   agents,
   skillMetrics: _skillMetrics,
-  filter,
-  assets,
-  onSelectAgent,
-  onSelectSkill
+  assets
 }: SkillFlowPanelProps): JSX.Element {
   const rows = useMemo(() => {
     return agents
@@ -114,13 +110,12 @@ export default function SkillFlowPanel({
       {rows.length === 0 && (
         <div className="pipeline-empty">
           <div className="pipeline-empty-icon">⚡</div>
-          <div className="pipeline-empty-text">에이전트 활동 대기 중</div>
-          <div className="pipeline-empty-sub">에이전트가 작업을 시작하면 실시간으로 표시됩니다</div>
+          <div className="pipeline-empty-text">일꾼 출동 대기 중</div>
+          <div className="pipeline-empty-sub">일감이 들어오면 실시간으로 표시됩니다</div>
         </div>
       )}
 
       {rows.map((agent) => {
-        const selected = filter.selectedAgentId === agent.agentId;
         const skill = agent.currentSkill;
         const gate = agent.currentHookGate;
         const agentSkillCount = skill ? (agent.skillUsageByKind[skill] ?? 0) : 0;
@@ -131,8 +126,7 @@ export default function SkillFlowPanel({
         return (
           <div
             key={agent.agentId}
-            className={`pipeline-row ${agent.state} ${selected ? "selected" : ""} growth-${agent.growthStage}`}
-            onClick={() => onSelectAgent(selected ? null : agent.agentId)}
+            className={`pipeline-row ${agent.state} growth-${agent.growthStage}`}
           >
             {/* Agent Avatar */}
             <div className="pipeline-avatar">
@@ -141,6 +135,9 @@ export default function SkillFlowPanel({
                 fallback={agentAvatarEmoji(agent) || teamEmoji(agent)}
                 title={agent.agentId}
                 className="pipeline-avatar-icon"
+                autoTrim={true}
+                maxAutoScale={7}
+                minAutoScale={3}
               />
               {agent.state === "active" && <div className="pipeline-pulse" />}
             </div>
@@ -150,7 +147,7 @@ export default function SkillFlowPanel({
               <div className="pipeline-name">
                 {shortId(agent.agentId)}
                 <span className={`pipeline-role role-${agent.runtimeRole}`}>{runtimeRoleLabel(agent.runtimeRole)}</span>
-                {agent.state === "completed" && <span className="pipeline-status completed">완료</span>}
+                {agent.state === "completed" && <span className="pipeline-status completed">마침</span>}
               </div>
               <div className="pipeline-xp-bar">
                 <div
@@ -169,10 +166,6 @@ export default function SkillFlowPanel({
             {/* Skill Stage */}
             <div
               className={`pipeline-stage stage-skill ${skill ? "" : "inactive"}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (skill) onSelectSkill(filter.selectedSkill === skill ? null : skill);
-              }}
             >
               <IconToken
                 src={skillIcon}
@@ -189,7 +182,7 @@ export default function SkillFlowPanel({
             {/* Gate Status */}
             <div className={`pipeline-gate ${gateStatusClass(gate)}`}>
               <div className="pipeline-gate-orb" />
-              <span className="pipeline-gate-label">{gateStatusLabel(gate)}</span>
+              <span className="pipeline-gate-label">{gateStatusLabel(gate, agent.state)}</span>
             </div>
 
             {/* Stats */}

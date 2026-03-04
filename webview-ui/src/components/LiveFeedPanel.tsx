@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { WebviewAssetCatalog } from "@shared/assets";
-import type { FeedEvent, FilterState } from "@shared/domain";
+import type { FeedEvent } from "@shared/domain";
 import {
   gateEmoji,
   gateIconKey,
@@ -17,9 +17,7 @@ import IconToken from "./IconToken";
 
 interface LiveFeedPanelProps {
   events: FeedEvent[];
-  filter: FilterState;
   assets: WebviewAssetCatalog;
-  onSelectAgent: (agentId: string | null) => void;
   variant?: "panel" | "overlay";
 }
 
@@ -73,35 +71,17 @@ function compactDetail(value: string | undefined): string {
   return `${normalized.slice(0, 25)}...`;
 }
 
-function matchesFeed(event: FeedEvent, filter: FilterState): boolean {
-  if (filter.selectedAgentId && event.agentId !== filter.selectedAgentId) {
-    return false;
-  }
-  if (filter.selectedSkill && event.skill !== filter.selectedSkill) {
-    return false;
-  }
-  if (filter.selectedZoneId && event.zoneId !== filter.selectedZoneId) {
-    return false;
-  }
-  return true;
-}
-
 export default function LiveFeedPanel({
   events,
-  filter,
   assets,
-  onSelectAgent,
   variant = "panel"
 }: LiveFeedPanelProps): JSX.Element {
   const ordered = [...events].reverse();
-  const hasFilter = !!(filter.selectedAgentId || filter.selectedSkill || filter.selectedZoneId);
   const containerClass = variant === "overlay" ? "live-feed live-feed-overlay" : "panel-body live-feed";
 
   return (
     <div className={containerClass}>
       {ordered.map((event) => {
-        const selected = filter.selectedAgentId === event.agentId;
-        const matched = matchesFeed(event, filter);
         const skillIcon = iconUrl(assets, skillIconKey(event.skill));
         const gateIcon = iconUrl(assets, gateIconKey(event.hookGate));
         const zoneIcon = iconUrl(assets, zoneIconKey(event.zoneId));
@@ -125,11 +105,10 @@ export default function LiveFeedPanel({
           .join("\n");
 
         return (
-          <button
+          <div
             key={event.id}
-            className={`feed-row ${selected ? "selected" : ""} ${hasFilter && !matched ? "muted" : ""}`.trim()}
+            className="feed-row"
             title={tooltip}
-            onClick={() => onSelectAgent(selected ? null : event.agentId)}
           >
             <span className="feed-time">{formatTime(event.ts)}</span>
             <span className="feed-agent">{shortAgentId(event.agentId)}</span>
@@ -153,8 +132,8 @@ export default function LiveFeedPanel({
               className="mini-icon" 
             />
             <span className={`feed-growth growth-${stage}`}>{growthEmoji(stage)}</span>
-            <span className="feed-detail">{detail || "세부 없음"}</span>
-          </button>
+            <span className="feed-detail">{detail || "기록 없음"}</span>
+          </div>
         );
       })}
       {ordered.length === 0 ? <div className="empty-hint" title="작업 일지는 첫 이벤트가 오면 채워집니다">작업 일지 대기 중</div> : null}

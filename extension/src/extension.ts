@@ -9,6 +9,7 @@ import { AgentMdResolver } from "./agentMdResolver";
 import { SkillMdResolver } from "./skillMdResolver";
 import { loadAssetCatalog, toWebviewAssetCatalog } from "./assetPackLoader";
 import {
+  type RelativeLogPathBase,
   resolveUnmappedSkillLogPath,
   type UnmappedSkillLoggerConfig,
   UnmappedSkillLogger
@@ -41,6 +42,7 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private runtimeLogKey: string | null = null;
 
   private messageQueue: ExtToWebviewAtomicMessage[] = [];
+  private unmappedSkillLoggerConfigKey: string | null = null;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
@@ -53,7 +55,9 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     });
     this.agentMdResolver = new AgentMdResolver(this.paths.workspaceRoot);
     this.skillMdResolver = new SkillMdResolver(this.paths.workspaceRoot);
-    this.unmappedSkillLogger = new UnmappedSkillLogger(this.output, this.readUnmappedSkillLoggerConfig());
+    const initialUnmappedSkillLoggerConfig = this.readUnmappedSkillLoggerConfig();
+    this.unmappedSkillLogger = new UnmappedSkillLogger(this.output, initialUnmappedSkillLoggerConfig);
+    this.logUnmappedSkillLoggerConfig(initialUnmappedSkillLoggerConfig);
     this.branchResolver = new GitBranchResolver(this.paths.workspaceRoot, this.readBranchDetectSettings());
 
     this.runtimeHub = new ClaudeJsonlRuntimeHub({
@@ -88,9 +92,10 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
         }
         if (
           event.affectsConfiguration(`${CONFIG_SECTION}.debug.unmappedSkillLog.enabled`) ||
-          event.affectsConfiguration(`${CONFIG_SECTION}.debug.unmappedSkillLog.filePath`)
+          event.affectsConfiguration(`${CONFIG_SECTION}.debug.unmappedSkillLog.filePath`) ||
+          event.affectsConfiguration(`${CONFIG_SECTION}.debug.unmappedSkillLog.relativeBase`)
         ) {
-          this.unmappedSkillLogger.updateConfig(this.readUnmappedSkillLoggerConfig());
+          this.applyUnmappedSkillLoggerConfig();
         }
       })
     );
@@ -184,19 +189,6 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
           case "webview_ready":
             this.webviewReady = true;
             this.sendWorldInit();
-            this.sendFilterState();
-            return;
-          case "select_agent":
-            this.store.setFilterState({ selectedAgentId: message.agentId });
-            this.sendFilterState();
-            return;
-          case "select_skill":
-            this.store.setFilterState({ selectedSkill: message.skill });
-            this.sendFilterState();
-            return;
-          case "select_zone":
-            this.store.setFilterState({ selectedZoneId: null });
-            this.sendFilterState();
             return;
           default:
             return;
@@ -279,11 +271,31 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
     const enabled = config.get<boolean>("debug.unmappedSkillLog.enabled", false);
     const configuredPath = config.get<string>("debug.unmappedSkillLog.filePath", "");
-    const filePath = resolveUnmappedSkillLogPath(this.paths.workspaceRoot, configuredPath);
+    const relativeBase = config.get<RelativeLogPathBase>("debug.unmappedSkillLog.relativeBase", "global");
+    const filePath = resolveUnmappedSkillLogPath(this.paths.workspaceRoot, configuredPath, {
+      globalRoot: this.context.globalStorageUri.fsPath,
+      relativeBase
+    });
     return {
       enabled,
       filePath
     };
+  }
+
+  private applyUnmappedSkillLoggerConfig(): void {
+    const next = this.readUnmappedSkillLoggerConfig();
+    this.unmappedSkillLogger.updateConfig(next);
+    this.logUnmappedSkillLoggerConfig(next);
+  }
+
+  private logUnmappedSkillLoggerConfig(config: UnmappedSkillLoggerConfig): void {
+    const key = `${config.enabled ? "1" : "0"}|${config.filePath}`;
+    if (this.unmappedSkillLoggerConfigKey === key) {
+      return;
+    }
+    this.unmappedSkillLoggerConfigKey = key;
+    const state = config.enabled ? "enabled" : "disabled";
+    this.output.appendLine(`[debug] unmapped-skill logger ${state}: ${config.filePath}`);
   }
 
   private sendWorldInit(): void {
@@ -302,16 +314,6 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     } satisfies ExtToWebviewMessage);
 
     this.messageQueue = this.store.getFeed().map((event) => ({ type: "feed_append", event } satisfies ExtToWebviewMessage));
-  }
-
-  private sendFilterState(): void {
-    const filter = this.store.getFilterState();
-    this.enqueueMessage({
-      type: "filter_state",
-      selectedAgentId: filter.selectedAgentId,
-      selectedSkill: filter.selectedSkill,
-      selectedZoneId: filter.selectedZoneId
-    });
   }
 
   private replaceQueuedMessage(
@@ -340,8 +342,6 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
         (queued) => queued.type === "skill_metric_upsert" && queued.metric.skill === message.metric.skill,
         message
       );
-    } else if (message.type === "filter_state") {
-      replaced = this.replaceQueuedMessage((queued) => queued.type === "filter_state", message);
     }
 
     if (!replaced) {
@@ -377,7 +377,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(VIEW_TYPE, provider, {
-      webviewOptions: { retainContextWhenHidden: true }
+      webviewOptions: { retainContextWhenHidden: false }
     })
   );
 

@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import type { SkillKind } from "../../../shared/domain";
@@ -18,6 +19,13 @@ export type UnmappedSkillReason = "unknown_tool_name" | "assistant_without_tool_
 export interface UnmappedSkillLoggerConfig {
   enabled: boolean;
   filePath: string;
+}
+
+export type RelativeLogPathBase = "workspace" | "global";
+
+export interface ResolveUnmappedSkillLogPathOptions {
+  globalRoot?: string;
+  relativeBase?: RelativeLogPathBase;
 }
 
 interface OutputLike {
@@ -80,10 +88,37 @@ export function buildUnmappedSkillRecord(event: RawRuntimeEvent): UnmappedSkillR
   };
 }
 
-export function resolveUnmappedSkillLogPath(workspaceRoot: string, configuredPath: string | undefined): string {
+function resolveHomePrefixedPath(value: string): string | null {
+  if (value === "~") {
+    return os.homedir();
+  }
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.join(os.homedir(), value.slice(2));
+  }
+  return null;
+}
+
+export function resolveUnmappedSkillLogPath(
+  workspaceRoot: string,
+  configuredPath: string | undefined,
+  options?: ResolveUnmappedSkillLogPathOptions
+): string {
   const trimmed = (configuredPath ?? "").trim();
   const value = trimmed.length > 0 ? trimmed : DEFAULT_RELATIVE_LOG_PATH;
-  return path.isAbsolute(value) ? value : path.resolve(workspaceRoot, value);
+  const homePrefixed = resolveHomePrefixedPath(value);
+  if (homePrefixed) {
+    return homePrefixed;
+  }
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+
+  const relativeBase = options?.relativeBase ?? "workspace";
+  if (relativeBase === "global" && options?.globalRoot && options.globalRoot.trim().length > 0) {
+    return path.resolve(options.globalRoot, value);
+  }
+
+  return path.resolve(workspaceRoot, value);
 }
 
 export class UnmappedSkillLogger {
@@ -176,4 +211,3 @@ export class UnmappedSkillLogger {
     }
   }
 }
-

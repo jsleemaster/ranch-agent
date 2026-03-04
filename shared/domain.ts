@@ -92,9 +92,3 @@ export interface SkillMetricSnapshot {
   usageCount: number;
   growthStage: GrowthStage;
 }
-
-export interface FilterState {
-  selectedAgentId: string | null;
-  selectedSkill: SkillKind | null;
-  selectedZoneId: string | null;
-}

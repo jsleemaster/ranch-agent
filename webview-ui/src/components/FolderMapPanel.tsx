@@ -1,32 +1,19 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import type { WebviewAssetCatalog } from "@shared/assets";
-import type { AgentSnapshot, FilterState, ZoneSnapshot } from "@shared/domain";
+import type { AgentSnapshot, ZoneSnapshot } from "@shared/domain";
 import {
-  gateEmoji,
-  gateIconKey,
   iconUrl,
   spriteUrl,
   teamEmoji,
   teamIconKey,
-  zoneEmoji,
   zoneLabel
 } from "../world/iconKeys";
 
 interface FolderMapPanelProps {
   zones: ZoneSnapshot[];
   agents: AgentSnapshot[];
-  filter: FilterState;
   assets: WebviewAssetCatalog;
-  onSelectZone: (zoneId: string | null) => void;
   isMinimap?: boolean;
-}
-
-interface ZoneRect {
-  zoneId: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
 }
 
 interface WanderState {
@@ -41,17 +28,14 @@ interface DrawItem {
   agent: AgentSnapshot;
   x: number;
   y: number;
-  fromX: number;
-  fromY: number;
   size: number;
-  matched: boolean;
 }
 
-function matchesAgent(agent: AgentSnapshot, filter: FilterState): boolean {
-  if (filter.selectedAgentId && agent.agentId !== filter.selectedAgentId) return false;
-  if (filter.selectedSkill && agent.currentSkill !== filter.selectedSkill) return false;
-  if (filter.selectedZoneId && agent.currentZoneId !== filter.selectedZoneId) return false;
-  return true;
+interface TrimRect {
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
 }
 
 function seedFromAgent(id: string): number {
@@ -71,6 +55,66 @@ function getImage(cache: Map<string, HTMLImageElement>, url: string): HTMLImageE
   img.src = url;
   cache.set(url, img);
   return img;
+}
+
+function computeTrimRect(image: HTMLImageElement): TrimRect | null {
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+
+  try {
+    ctx.drawImage(image, 0, 0);
+    const pixels = ctx.getImageData(0, 0, width, height).data;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const alpha = pixels[(y * width + x) * 4 + 3];
+        if (alpha < 8) {
+          continue;
+        }
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return null;
+    }
+
+    return {
+      sx: minX,
+      sy: minY,
+      sw: maxX - minX + 1,
+      sh: maxY - minY + 1
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getTrimRect(cache: Map<string, TrimRect | null>, key: string, image: HTMLImageElement): TrimRect | null {
+  if (cache.has(key)) {
+    return cache.get(key) ?? null;
+  }
+  const rect = computeTrimRect(image);
+  cache.set(key, rect);
+  return rect;
 }
 
 function gateAura(gate: AgentSnapshot["currentHookGate"]): string | null {
@@ -111,16 +155,14 @@ interface SimplifiedZone {
 export default function FolderMapPanel({
   zones,
   agents,
-  filter,
   assets,
-  onSelectZone,
   isMinimap = false
 }: FolderMapPanelProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wanderRef = useRef<Map<string, WanderState>>(new Map());
   const positionRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-  const zoneRectsRef = useRef<ZoneRect[]>([]);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+const trimRectCacheRef = useRef<Map<string, TrimRect | null>>(new Map());
 
   const effectiveZones = useMemo<SimplifiedZone[]>(() => {
     if (zones.length > 0) return zones.map(z => ({ zoneId: z.zoneId }));
@@ -156,8 +198,6 @@ export default function FolderMapPanel({
     const activeZones = effectiveZones;
     const activeAgents = agents;
     const activeAssets = assets;
-    const activeFilter = filter;
-
     const render = () => {
       const parent = canvas.parentElement;
       if (!parent) return;
@@ -189,7 +229,6 @@ export default function FolderMapPanel({
       const tileW = Math.max(10, (wWidth - (cols + 1) * gap) / (cols || 1));
       const tileH = Math.max(10, (wHeight - (rows + 1) * gap) / (rows || 1));
 
-      zoneRectsRef.current = [];
       const now = Date.now() / 1000;
       const visibleAgentIds = new Set<string>();
       const drawQueue: DrawItem[] = [];
@@ -203,9 +242,6 @@ export default function FolderMapPanel({
         const w = tileW;
         const h = tileH;
 
-        zoneRectsRef.current.push({ zoneId: zone.zoneId, x, y, w, h });
-
-        const isSelected = activeFilter.selectedZoneId === zone.zoneId;
         const zoneAgents = isMinimap && zone.zoneId === "ranch-main"
           ? activeAgents
           : activeAgents.filter((a) => (a.currentZoneId ?? "ranch-main") === zone.zoneId);
@@ -215,21 +251,21 @@ export default function FolderMapPanel({
 
         // Tile background
         if (isMinimap) {
-            context.fillStyle = isSelected ? "rgba(212, 134, 11, 0.28)" : "rgba(28, 19, 10, 0.92)";
+            context.fillStyle = "rgba(28, 19, 10, 0.92)";
         } else {
-            context.fillStyle = isSelected ? "rgba(74, 52, 34, 0.4)" : "rgba(30, 24, 15, 0.3)";
+            context.fillStyle = "rgba(30, 24, 15, 0.3)";
         }
         drawRoundedRect(context, x, y, w, h, 8);
         context.fill();
 
         // Border
-        context.strokeStyle = isSelected ? "#F0B840" : (isMinimap ? "rgba(212, 134, 11, 0.15)" : "rgba(139, 107, 62, 0.2)");
+        context.strokeStyle = isMinimap ? "rgba(212, 134, 11, 0.15)" : "rgba(139, 107, 62, 0.2)";
         if (hasWarning && !isMinimap) {
           const pulse = (Math.sin(now * 4) + 1) / 2;
           context.strokeStyle = `rgba(224, 85, 69, ${0.3 + pulse * 0.5})`;
           context.lineWidth = 2 + pulse * 2;
         } else {
-          context.lineWidth = isSelected ? 2 : 1;
+          context.lineWidth = 1;
         }
         context.stroke();
 
@@ -292,18 +328,16 @@ export default function FolderMapPanel({
           const basePosY = y + h / 2 + state.y;
 
           const pos = positionRef.current.get(agent.agentId) ?? { x: basePosX, y: basePosY };
-          const fromX = pos.x; const fromY = pos.y;
           pos.x += (basePosX - pos.x) * 0.1;
           pos.y += (basePosY - pos.y) * 0.1;
           positionRef.current.set(agent.agentId, pos);
 
           const bounce = isMinimap ? 0 : Math.sin(now * 5 + seedFromAgent(agent.agentId)) * 2;
-          const size = isMinimap ? 18 : 20;
+          const size = isMinimap ? 42 : 20;
 
           drawQueue.push({
             agent, x: pos.x - size / 2, y: pos.y - size / 2 + bounce,
-            fromX, fromY, size,
-            matched: matchesAgent(agent, activeFilter)
+            size,
           });
           visibleAgentIds.add(agent.agentId);
         }
@@ -315,18 +349,30 @@ export default function FolderMapPanel({
 
       drawQueue.sort((a, b) => a.y - b.y);
       for (const item of drawQueue) {
-        const { agent, x, y, size, matched } = item;
-        context.globalAlpha = matched ? 1 : 0.25;
+        const { agent, x, y, size } = item;
+        const renderedSize = isMinimap ? Math.round(size * 1.35) : size;
+        const drawX = x - (renderedSize - size) / 2;
+        const drawY = y - (renderedSize - size) / 2;
+        context.globalAlpha = 1;
         
         const spriteUrlStr = spriteUrl(activeAssets, agent.state);
         const iconUrlStr = iconUrl(activeAssets, teamIconKey(agent));
         
         const sprite = (spriteUrlStr ? getImage(imageCacheRef.current, spriteUrlStr) : null) ||
                        (iconUrlStr ? getImage(imageCacheRef.current, iconUrlStr) : null);
+        const spriteCacheKey = spriteUrlStr ?? iconUrlStr ?? "";
 
         const canDrawSprite = !!(sprite && sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0);
         if (canDrawSprite && sprite) {
-          context.drawImage(sprite, x, y, size, size);
+          const trim = spriteCacheKey
+            ? getTrimRect(trimRectCacheRef.current, spriteCacheKey, sprite)
+            : null;
+
+          if (trim && trim.sw > 0 && trim.sh > 0) {
+            context.drawImage(sprite, trim.sx, trim.sy, trim.sw, trim.sh, drawX, drawY, renderedSize, renderedSize);
+          } else {
+            context.drawImage(sprite, drawX, drawY, renderedSize, renderedSize);
+          }
         } else {
           const fillColor = agent.state === "active"
             ? "#7CC66E"
@@ -335,7 +381,7 @@ export default function FolderMapPanel({
               : (isMinimap ? "#D1BE95" : "#A89478");
           context.fillStyle = fillColor;
           context.beginPath();
-          context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+          context.arc(drawX + renderedSize / 2, drawY + renderedSize / 2, renderedSize / 2, 0, Math.PI * 2);
           context.fill();
 
           // Fallback mark so minimap remains visible even if sprites fail to load.
@@ -346,11 +392,11 @@ export default function FolderMapPanel({
           context.textAlign = "center";
           context.textBaseline = "middle";
           context.fillStyle = "#1f150c";
-          context.fillText(teamEmoji(agent), x + size / 2, y + size / 2 + 0.5);
+          context.fillText(teamEmoji(agent), drawX + renderedSize / 2, drawY + renderedSize / 2 + 0.5);
         }
 
         const aura = gateAura(agent.currentHookGate);
-        if (aura && matched && !isMinimap) {
+        if (aura && !isMinimap) {
           context.strokeStyle = aura; context.lineWidth = 2;
           context.strokeRect(x - 2, y - 2, size + 4, size + 4);
         }
@@ -362,28 +408,18 @@ export default function FolderMapPanel({
         context.font = "11px 'JetBrains Mono', monospace";
         context.textAlign = "center";
         context.textBaseline = "middle";
-        context.fillText("에이전트 대기 중", wWidth / 2, wHeight / 2);
+        context.fillText("일꾼 대기 중", wWidth / 2, wHeight / 2);
       }
       animationFrame = window.requestAnimationFrame(render);
     };
 
     animationFrame = window.requestAnimationFrame(render);
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [effectiveZones, agents, filter, assets, isMinimap]);
-
-  const onCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rectBounds = canvas.getBoundingClientRect();
-    const x = event.clientX - rectBounds.left;
-    const y = event.clientY - rectBounds.top;
-    const hit = zoneRectsRef.current.find(z => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h);
-    if (hit) onSelectZone(filter.selectedZoneId === hit.zoneId ? null : hit.zoneId);
-  };
+  }, [effectiveZones, agents, assets, isMinimap]);
 
   return (
     <div className={`folder-map ${isMinimap ? 'minimap-mode' : ''}`}>
-      <canvas ref={canvasRef} className="zone-canvas" onClick={onCanvasClick} />
+      <canvas ref={canvasRef} className="zone-canvas" />
       {!isMinimap && ranchStats && (
         <div className="ranch-summary-bar">
           <div className="summary-pill">🏠 <span>구역 활용</span> <strong>{ranchStats.activeCount}/{ranchStats.totalCount} ({ranchStats.utilPercent}%)</strong></div>

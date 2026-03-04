@@ -3,7 +3,6 @@ import type {
   AgentRuntimeRole,
   AgentSnapshot,
   FeedEvent,
-  FilterState,
   GrowthStage,
   SkillKind,
   SkillMdCatalogItem,
@@ -179,7 +178,6 @@ export interface WorldSnapshot {
   agentMds: AgentMdCatalogItem[];
   skillMds: SkillMdCatalogItem[];
   feed: FeedEvent[];
-  filter: FilterState;
 }
 
 type Listener = () => void;
@@ -191,12 +189,6 @@ export class WorldState {
   private agentMds: AgentMdCatalogItem[] = [];
   private skillMds: SkillMdCatalogItem[] = [];
   private readonly feed: FeedEvent[] = [];
-
-  private filter: FilterState = {
-    selectedAgentId: null,
-    selectedSkill: null,
-    selectedZoneId: null
-  };
 
   private readonly listeners = new Set<Listener>();
 
@@ -289,16 +281,6 @@ export class WorldState {
           this.emit();
         }
         return;
-      case "filter_state":
-        this.filter = {
-          selectedAgentId: message.selectedAgentId,
-          selectedSkill: message.selectedSkill,
-          selectedZoneId: message.selectedZoneId
-        };
-        if (shouldEmit) {
-          this.emit();
-        }
-        return;
       default:
         return;
     }
@@ -311,8 +293,7 @@ export class WorldState {
       skills: [...this.skills.values()].sort((a, b) => b.usageCount - a.usageCount || a.skill.localeCompare(b.skill)),
       agentMds: [...this.agentMds],
       skillMds: [...this.skillMds],
-      feed: [...this.feed],
-      filter: { ...this.filter }
+      feed: [...this.feed]
     };
   }
 

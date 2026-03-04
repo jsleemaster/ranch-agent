@@ -3,18 +3,18 @@ import { describe, expect, it } from "vitest";
 import { parseWebviewMessage } from "../protocolGuards";
 
 describe("parseWebviewMessage", () => {
-  it("accepts valid select_skill", () => {
-    const parsed = parseWebviewMessage({ type: "select_skill", skill: "bash" });
-    expect(parsed).toEqual({ type: "select_skill", skill: "bash" });
+  it("accepts webview_ready", () => {
+    const parsed = parseWebviewMessage({ type: "webview_ready" });
+    expect(parsed).toEqual({ type: "webview_ready" });
   });
 
-  it("rejects invalid select_skill payload", () => {
-    const parsed = parseWebviewMessage({ type: "select_skill", skill: "invalid" });
+  it("rejects removed filter messages", () => {
+    const parsed = parseWebviewMessage({ type: "select_skill", skill: "bash" });
     expect(parsed).toBeNull();
   });
 
   it("rejects missing fields", () => {
-    expect(parseWebviewMessage({ type: "select_agent" })).toBeNull();
+    expect(parseWebviewMessage({ type: "select_agent", agentId: "a" })).toBeNull();
     expect(parseWebviewMessage({})).toBeNull();
   });
 });
