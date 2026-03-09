@@ -3,22 +3,39 @@ import type {
   AgentRuntimeRole,
   FeedEvent,
   GrowthStage,
+  RuntimeSignalKind,
+  RuntimeSignalMetricSnapshot,
+  SessionCloseReason,
+  SessionHistorySnapshot,
   SkillKind,
   SkillMetricSnapshot,
+  StatuslineBudgetSnapshot,
   ZoneSnapshot
 } from "../../../shared/domain";
-import type { RawRuntimeEvent } from "../../../shared/runtime";
+import type { RawRuntimeEvent, StatuslineRawSnapshot } from "../../../shared/runtime";
 import { FEED_LIMIT } from "../constants";
 import { deriveAgentState, deriveHookGateState } from "./hookDeriver";
+import { classifyRuntimeSignal } from "./runtimeSignalNormalizer";
 import { normalizeSkill } from "./skillNormalizer";
 import type { TeamResolver } from "./teamResolver";
+import { stableAgentRuntimeIdForSource } from "../runtimeHub";
 
 const SKILL_ORDER: SkillKind[] = ["read", "edit", "write", "bash", "search", "task", "ask", "other"];
+const SIGNAL_ORDER: RuntimeSignalKind[] = [
+  "orchestration_signal",
+  "unknown_tool_signal",
+  "tool_name_missing_signal",
+  "assistant_reply_signal"
+];
 const GROWTH_EVENT_TYPES = new Set<RawRuntimeEvent["type"]>(["tool_start", "tool_done", "assistant_text"]);
 const MAX_PENDING_TOOL_STARTS = 256;
 const GROWTH_LEVEL_SPAN = 35;
-const STALE_AGENT_RETENTION_MS = 60 * 1000;
+const STALE_AGENT_RETENTION_MS_MAIN = 60 * 1000;
+const STALE_AGENT_RETENTION_MS_TEAM = 45 * 1000;
+const STALE_AGENT_RETENTION_MS_SUBAGENT = 20 * 1000;
 const COMPLETED_AGENT_IDLE_MS = 30 * 1000;
+const MAX_PENDING_WAIT_STALE_MS = 45 * 1000;
+const SESSION_HISTORY_LIMIT = 40;
 
 type WaitKind = "permission" | "turn";
 
@@ -31,6 +48,23 @@ interface PendingToolStartState {
   startTs: number;
   toolId: string | null;
   toolName: string | null;
+}
+
+interface ActiveSessionState {
+  sessionId: string;
+  lineageId: string;
+  runtimeRole: AgentRuntimeRole;
+  startedAtTs: number;
+  lastEventTs: number;
+  eventCount: number;
+  toolRunCount: number;
+  waitTotalMs: number;
+  promptTokensTotal: number;
+  completionTokensTotal: number;
+  totalTokensTotal: number;
+  statuslineSessionTokensTotal?: number;
+  statuslineContextPeakPercent?: number;
+  statuslineCostUsd?: number;
 }
 
 function growthLevelForUsage(usageCount: number): number {
@@ -131,6 +165,11 @@ function normalizeToolKey(raw: string | undefined): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function normalizeSessionRuntimeId(raw: string | null | undefined, lineageId: string): string {
+  const normalized = (raw ?? "").trim();
+  return normalized.length > 0 ? normalized : lineageId;
+}
+
 interface SnapshotDependencies {
   teamResolver: TeamResolver;
 }
@@ -139,7 +178,15 @@ export interface SnapshotUpdate {
   agent: AgentSnapshot;
   zones: ZoneSnapshot[];
   skillMetrics: SkillMetricSnapshot[];
+  signalMetrics: RuntimeSignalMetricSnapshot[];
+  sessionArchives: SessionHistorySnapshot[];
   feed: FeedEvent;
+}
+
+export interface StatuslineBudgetUpdate {
+  budget: StatuslineBudgetSnapshot | null;
+  sessionArchives: SessionHistorySnapshot[];
+  feed: FeedEvent[];
 }
 
 export class SnapshotStore {
@@ -147,6 +194,10 @@ export class SnapshotStore {
 
   private readonly agents = new Map<string, AgentSnapshot>();
   private readonly skillMetrics = new Map<SkillKind, SkillMetricSnapshot>();
+  private readonly signalMetrics = new Map<RuntimeSignalKind, RuntimeSignalMetricSnapshot>();
+  private readonly activeSessionsByLineage = new Map<string, ActiveSessionState>();
+  private readonly budgetByLineage = new Map<string, StatuslineBudgetSnapshot>();
+  private readonly sessionHistory: SessionHistorySnapshot[] = [];
   private readonly feed: FeedEvent[] = [];
   // Timing state machine:
   // - pendingWaitByAgent tracks when an agent entered waiting state.
@@ -166,12 +217,20 @@ export class SnapshotStore {
         growthStage: "seed"
       });
     }
+
+    for (const signal of SIGNAL_ORDER) {
+      this.signalMetrics.set(signal, {
+        signal,
+        usageCount: 0
+      });
+    }
   }
 
   applyRawEvent(raw: RawRuntimeEvent): SnapshotUpdate {
     const eventTs = Number.isFinite(raw.ts) ? raw.ts : Date.now();
-    this.refreshCompletedStates(eventTs);
-    this.pruneStaleAgents(eventTs);
+    const sessionArchives = this.archiveInactiveSessions(eventTs);
+    const sessionRuntimeId = normalizeSessionRuntimeId(raw.sessionRuntimeId, raw.agentRuntimeId);
+    sessionArchives.push(...this.rotateSessionIfNeeded(raw.agentRuntimeId, sessionRuntimeId, eventTs));
     const existing = this.agents.get(raw.agentRuntimeId);
 
     const team = this.teamResolver.resolveTeam(raw.agentRuntimeId, raw.filePath);
@@ -182,6 +241,7 @@ export class SnapshotStore {
 
     const currentSkill: SkillKind | null = nextSkill ?? existing?.currentSkill ?? null;
     const runtimeRole = deriveRuntimeRole(raw, existing?.runtimeRole);
+    const activeSession = this.ensureActiveSession(raw.agentRuntimeId, sessionRuntimeId, runtimeRole, eventTs);
     const currentHookGate = nextGate ?? existing?.currentHookGate ?? null;
     const hasPendingToolBeforeEvent = (this.pendingToolStartsByAgent.get(raw.agentRuntimeId)?.length ?? 0) > 0;
     const shouldIgnoreTurnWaiting = raw.type === "turn_waiting" && hasPendingToolBeforeEvent;
@@ -266,7 +326,18 @@ export class SnapshotStore {
         toolRunTotalMs += completedToolRunMs;
         toolRunCount += 1;
         lastToolRunMs = completedToolRunMs;
+        activeSession.toolRunCount += 1;
       }
+    }
+
+    activeSession.runtimeRole = runtimeRole;
+    activeSession.lastEventTs = eventTs;
+    activeSession.eventCount += 1;
+    activeSession.promptTokensTotal += eventPromptTokens;
+    activeSession.completionTokensTotal += eventCompletionTokens;
+    activeSession.totalTokensTotal += eventTotalTokens;
+    if (typeof waitDurationMs === "number") {
+      activeSession.waitTotalMs += waitDurationMs;
     }
 
     const shouldGrow = GROWTH_EVENT_TYPES.has(raw.type);
@@ -345,11 +416,27 @@ export class SnapshotStore {
       touchedSkillMetrics.push(nextSkillMetric);
     }
 
+    const touchedSignalMetrics: RuntimeSignalMetricSnapshot[] = [];
+    const runtimeSignal = classifyRuntimeSignal(raw);
+    if (runtimeSignal) {
+      const currentSignalMetric = this.signalMetrics.get(runtimeSignal) ?? {
+        signal: runtimeSignal,
+        usageCount: 0
+      };
+      const nextSignalMetric: RuntimeSignalMetricSnapshot = {
+        signal: runtimeSignal,
+        usageCount: currentSignalMetric.usageCount + 1
+      };
+      this.signalMetrics.set(runtimeSignal, nextSignalMetric);
+      touchedSignalMetrics.push(nextSignalMetric);
+    }
+
     const feed: FeedEvent = {
       id: `${raw.agentRuntimeId}:${raw.ts}:${this.sequence++}`,
       ts: raw.ts,
       agentId: raw.agentRuntimeId,
       skill: currentSkill,
+      runtimeSignal,
       hookGate: currentHookGate,
       zoneId: nextZoneId,
       branchName,
@@ -375,14 +462,22 @@ export class SnapshotStore {
       agent,
       zones: [],
       skillMetrics: touchedSkillMetrics,
+      signalMetrics: touchedSignalMetrics,
+      sessionArchives,
       feed
     };
   }
 
-  getWorldInit(): { agents: AgentSnapshot[]; zones: ZoneSnapshot[]; skills: SkillMetricSnapshot[] } {
+  getWorldInit(): {
+    agents: AgentSnapshot[];
+    zones: ZoneSnapshot[];
+    skills: SkillMetricSnapshot[];
+    signals: RuntimeSignalMetricSnapshot[];
+    sessions: SessionHistorySnapshot[];
+    budgets: StatuslineBudgetSnapshot[];
+  } {
     const nowTs = this.resolvePruneNowTs();
-    this.refreshCompletedStates(nowTs);
-    this.pruneStaleAgents(nowTs);
+    this.archiveInactiveSessions(nowTs);
     const agents = [...this.agents.values()].sort((a, b) => a.agentId.localeCompare(b.agentId));
     const skills: SkillMetricSnapshot[] = SKILL_ORDER.map((skill): SkillMetricSnapshot => {
       const existing = this.skillMetrics.get(skill);
@@ -396,11 +491,106 @@ export class SnapshotStore {
       };
     });
 
-    return { agents, zones: [], skills };
+    const signals: RuntimeSignalMetricSnapshot[] = SIGNAL_ORDER.map((signal): RuntimeSignalMetricSnapshot => {
+      const existing = this.signalMetrics.get(signal);
+      if (existing) {
+        return existing;
+      }
+      return {
+        signal,
+        usageCount: 0
+      };
+    });
+
+    return {
+      agents,
+      zones: [],
+      skills,
+      signals,
+      sessions: [...this.sessionHistory].sort((a, b) => b.endedAtTs - a.endedAtTs),
+      budgets: [...this.budgetByLineage.values()].sort((a, b) => b.updatedAtTs - a.updatedAtTs)
+    };
   }
 
   getFeed(): FeedEvent[] {
     return [...this.feed];
+  }
+
+  applyStatuslineSnapshot(snapshot: StatuslineRawSnapshot): StatuslineBudgetUpdate {
+    const lineageId = this.resolveBudgetLineageId(snapshot);
+    if (!lineageId) {
+      return {
+        budget: null,
+        sessionArchives: [],
+        feed: []
+      };
+    }
+
+    const sessionRuntimeId = normalizeSessionRuntimeId(snapshot.sessionRuntimeId, lineageId);
+    const updatedAtTs = Number.isFinite(snapshot.ts) ? snapshot.ts : Date.now();
+    const previousActiveSession = this.activeSessionsByLineage.get(lineageId);
+    const archives = this.archiveInactiveSessions(updatedAtTs);
+    archives.push(...this.rotateSessionIfNeeded(lineageId, sessionRuntimeId, updatedAtTs));
+
+    const activeSession = this.activeSessionsByLineage.get(lineageId);
+
+    const budget: StatuslineBudgetSnapshot = {
+      lineageId,
+      sessionRuntimeId,
+      updatedAtTs,
+      modelId: snapshot.modelId ?? null,
+      modelDisplayName: snapshot.modelDisplayName ?? null,
+      contextUsedTokens: snapshot.contextUsedTokens,
+      contextMaxTokens: snapshot.contextMaxTokens,
+      contextPercent: snapshot.contextPercent,
+      sessionTokensTotal: snapshot.sessionTokensTotal,
+      costUsd: snapshot.totalCostUsd
+    };
+
+    const feed: FeedEvent[] = [];
+
+    if (
+      previousActiveSession &&
+      previousActiveSession.sessionId !== sessionRuntimeId &&
+      previousActiveSession.sessionId.trim().length > 0
+    ) {
+      feed.push(
+        this.pushFeedEvent({
+          ts: updatedAtTs,
+          agentId: lineageId,
+          kind: "session_rollover",
+          skill: null,
+          runtimeSignal: null,
+          hookGate: null,
+          zoneId: null,
+          growthStage: this.agents.get(lineageId)?.growthStage ?? "seed",
+          text: "세션 전환"
+        })
+      );
+    }
+
+    if (activeSession) {
+      if (typeof budget.sessionTokensTotal === "number") {
+        activeSession.statuslineSessionTokensTotal = budget.sessionTokensTotal;
+      }
+      if (typeof budget.contextPercent === "number") {
+        activeSession.statuslineContextPeakPercent =
+          typeof activeSession.statuslineContextPeakPercent === "number"
+            ? Math.max(activeSession.statuslineContextPeakPercent, budget.contextPercent)
+            : budget.contextPercent;
+      }
+      if (typeof budget.costUsd === "number") {
+        activeSession.statuslineCostUsd = budget.costUsd;
+      }
+    }
+
+    this.budgetByLineage.set(lineageId, budget);
+
+    return {
+      budget,
+      sessionArchives: archives,
+      feed
+    };
   }
 
   private consumePendingWait(agentRuntimeId: string, endTs: number): { durationMs: number; kind: WaitKind } | null {
@@ -469,51 +659,139 @@ export class SnapshotStore {
     return Math.max(0, endTs - matched.startTs);
   }
 
-  private pruneStaleAgents(nowTs: number): void {
-    const safeNow = Number.isFinite(nowTs) ? nowTs : Date.now();
-    const cutoff = safeNow - STALE_AGENT_RETENTION_MS;
-    if (!Number.isFinite(cutoff)) {
-      return;
+  private ensureActiveSession(
+    lineageId: string,
+    sessionId: string,
+    runtimeRole: AgentRuntimeRole,
+    ts: number
+  ): ActiveSessionState {
+    const existing = this.activeSessionsByLineage.get(lineageId);
+    if (existing && existing.sessionId === sessionId) {
+      existing.runtimeRole = runtimeRole;
+      existing.lastEventTs = ts;
+      return existing;
     }
 
-    for (const [agentId, snapshot] of this.agents.entries()) {
-      if (snapshot.lastEventTs >= cutoff) {
-        continue;
-      }
-      this.agents.delete(agentId);
-      this.pendingWaitByAgent.delete(agentId);
-      this.pendingToolStartsByAgent.delete(agentId);
-    }
+    const created: ActiveSessionState = {
+      sessionId,
+      lineageId,
+      runtimeRole,
+      startedAtTs: ts,
+      lastEventTs: ts,
+      eventCount: 0,
+      toolRunCount: 0,
+      waitTotalMs: 0,
+      promptTokensTotal: 0,
+      completionTokensTotal: 0,
+      totalTokensTotal: 0
+    };
+    this.activeSessionsByLineage.set(lineageId, created);
+    return created;
   }
 
-  private refreshCompletedStates(nowTs: number): void {
-    const safeNow = Number.isFinite(nowTs) ? nowTs : Date.now();
-    for (const [agentId, snapshot] of this.agents.entries()) {
-      if (snapshot.state === "active") {
-        continue;
-      }
+  private rotateSessionIfNeeded(lineageId: string, nextSessionId: string, nowTs: number): SessionHistorySnapshot[] {
+    const activeSession = this.activeSessionsByLineage.get(lineageId);
+    if (!activeSession || activeSession.sessionId === nextSessionId) {
+      return [];
+    }
 
-      const hasPendingWait = this.pendingWaitByAgent.has(agentId);
+    const archived = this.archiveLineageSession(lineageId, "conversation_rollover", nowTs);
+    return archived ? [archived] : [];
+  }
+
+  private archiveInactiveSessions(nowTs: number): SessionHistorySnapshot[] {
+    const safeNow = Number.isFinite(nowTs) ? nowTs : Date.now();
+    const archived: SessionHistorySnapshot[] = [];
+
+    for (const [agentId, snapshot] of [...this.agents.entries()]) {
+      const pendingWait = this.pendingWaitByAgent.get(agentId);
+      const hasStalePendingWait = !!pendingWait && safeNow - pendingWait.startTs >= MAX_PENDING_WAIT_STALE_MS;
+      const hasPendingWait = !!pendingWait && !hasStalePendingWait;
       const pendingTools = this.pendingToolStartsByAgent.get(agentId);
       const hasPendingTool = !!pendingTools && pendingTools.length > 0;
       const idleMs = safeNow - snapshot.lastEventTs;
-      const shouldBeCompleted = idleMs >= COMPLETED_AGENT_IDLE_MS && !hasPendingWait && !hasPendingTool;
-
-      if (shouldBeCompleted && snapshot.state !== "completed") {
-        this.agents.set(agentId, {
-          ...snapshot,
-          state: "completed"
-        });
+      if (idleMs >= COMPLETED_AGENT_IDLE_MS && !hasPendingWait && !hasPendingTool) {
+        const closed = this.archiveLineageSession(agentId, "work_finished", safeNow);
+        if (closed) {
+          archived.push(closed);
+        }
         continue;
       }
 
-      if (!shouldBeCompleted && snapshot.state === "completed") {
-        this.agents.set(agentId, {
-          ...snapshot,
-          state: "waiting"
-        });
+      const retentionMs =
+        snapshot.runtimeRole === "subagent"
+          ? STALE_AGENT_RETENTION_MS_SUBAGENT
+          : snapshot.runtimeRole === "team"
+            ? STALE_AGENT_RETENTION_MS_TEAM
+            : STALE_AGENT_RETENTION_MS_MAIN;
+      if (idleMs < retentionMs) {
+        continue;
+      }
+      const closed = this.archiveLineageSession(agentId, "stale_cleanup", safeNow);
+      if (closed) {
+        archived.push(closed);
+        continue;
+      }
+
+      if (hasStalePendingWait) {
+        this.pendingWaitByAgent.delete(agentId);
       }
     }
+
+    return archived;
+  }
+
+  private archiveLineageSession(
+    lineageId: string,
+    closeReason: SessionCloseReason,
+    endTs: number
+  ): SessionHistorySnapshot | null {
+    const snapshot = this.agents.get(lineageId);
+    const activeSession = this.activeSessionsByLineage.get(lineageId);
+    if (!snapshot && !activeSession) {
+      return null;
+    }
+
+    let waitTotalMs = activeSession?.waitTotalMs ?? snapshot?.waitTotalMs ?? 0;
+    const pendingWait = this.pendingWaitByAgent.get(lineageId);
+    if (pendingWait) {
+      waitTotalMs += Math.max(0, endTs - pendingWait.startTs);
+      this.pendingWaitByAgent.delete(lineageId);
+    }
+
+    this.pendingToolStartsByAgent.delete(lineageId);
+    this.activeSessionsByLineage.delete(lineageId);
+    this.agents.delete(lineageId);
+    const budget = this.budgetByLineage.get(lineageId);
+    this.budgetByLineage.delete(lineageId);
+
+    const startedAtTs = activeSession?.startedAtTs ?? snapshot?.lastEventTs ?? endTs;
+    const endedAtTs = Math.max(endTs, activeSession?.lastEventTs ?? snapshot?.lastEventTs ?? endTs);
+    const archived: SessionHistorySnapshot = {
+      sessionId: activeSession?.sessionId ?? lineageId,
+      lineageId,
+      runtimeRole: activeSession?.runtimeRole ?? snapshot?.runtimeRole ?? "main",
+      startedAtTs,
+      endedAtTs,
+      durationMs: Math.max(0, endedAtTs - startedAtTs),
+      eventCount: activeSession?.eventCount ?? 0,
+      toolRunCount: activeSession?.toolRunCount ?? snapshot?.toolRunCount ?? 0,
+      waitTotalMs,
+      promptTokensTotal: activeSession?.promptTokensTotal ?? snapshot?.promptTokensTotal ?? 0,
+      completionTokensTotal: activeSession?.completionTokensTotal ?? snapshot?.completionTokensTotal ?? 0,
+      totalTokensTotal: activeSession?.totalTokensTotal ?? snapshot?.totalTokensTotal ?? 0,
+      statuslineSessionTokensTotal: activeSession?.statuslineSessionTokensTotal ?? budget?.sessionTokensTotal,
+      statuslineContextPeakPercent: activeSession?.statuslineContextPeakPercent,
+      statuslineCostUsd: activeSession?.statuslineCostUsd ?? budget?.costUsd,
+      closeReason
+    };
+
+    this.sessionHistory.unshift(archived);
+    if (this.sessionHistory.length > SESSION_HISTORY_LIMIT) {
+      this.sessionHistory.splice(SESSION_HISTORY_LIMIT);
+    }
+
+    return archived;
   }
 
   private resolvePruneNowTs(): number {
@@ -534,5 +812,43 @@ export class SnapshotStore {
     }
 
     return Date.now();
+  }
+
+  private resolveBudgetLineageId(snapshot: StatuslineRawSnapshot): string | null {
+    const transcriptPath = (snapshot.transcriptPath ?? "").trim();
+    if (transcriptPath.length > 0) {
+      return stableAgentRuntimeIdForSource(transcriptPath);
+    }
+
+    const sessionRuntimeId = (snapshot.sessionRuntimeId ?? "").trim();
+    if (!sessionRuntimeId) {
+      return null;
+    }
+
+    for (const [lineageId, activeSession] of this.activeSessionsByLineage.entries()) {
+      if (activeSession.sessionId === sessionRuntimeId) {
+        return lineageId;
+      }
+    }
+
+    return null;
+  }
+
+  private pushFeedEvent(
+    event: Omit<FeedEvent, "id" | "branchName" | "mainBranchRisk" | "invokedAgentMdId" | "invokedSkillMdId">
+  ): FeedEvent {
+    const next: FeedEvent = {
+      id: `${event.agentId}:${event.ts}:${this.sequence++}`,
+      branchName: null,
+      mainBranchRisk: false,
+      invokedAgentMdId: null,
+      invokedSkillMdId: null,
+      ...event
+    };
+    this.feed.push(next);
+    if (this.feed.length > FEED_LIMIT) {
+      this.feed.shift();
+    }
+    return next;
   }
 }
