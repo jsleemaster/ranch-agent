@@ -486,16 +486,16 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
     return null;
   }
 
-  const agentRuntimeId =
-    pickString(obj, [
-      "agentRuntimeId",
-      "agentId",
-      "agent_id",
-      "sessionId",
-      "session_id",
-      "conversation_id"
-    ]) ??
-    options.fallbackAgentRuntimeId;
+  const sessionRuntimeId = pickString(obj, [
+    "sessionId",
+    "session_id",
+    "conversationId",
+    "conversation_id",
+    "agentRuntimeId",
+    "agentId",
+    "agent_id"
+  ]);
+  const agentRuntimeId = sessionRuntimeId ?? options.fallbackAgentRuntimeId;
 
   const contentSignals = parseContentSignals(obj);
   const toolName = pickString(obj, ["toolName", "tool_name", "tool.name", "name"]) ?? contentSignals.toolUse?.name;
@@ -525,6 +525,7 @@ export function parseClaudeJsonlLine(line: string, options: ParseOptions): RawRu
   return {
     runtime: options.runtime ?? "claude-jsonl",
     agentRuntimeId,
+    sessionRuntimeId: sessionRuntimeId ?? null,
     ts,
     type: eventType,
     toolName,

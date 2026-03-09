@@ -10,15 +10,23 @@ const DEFAULT_RELATIVE_LOG_PATH = ".local-debug/unmapped-skill-events.ndjson";
 const FLUSH_INTERVAL_MS = 800;
 const IMMEDIATE_FLUSH_COUNT = 32;
 const MAX_BUFFERED_LINES = 1024;
+export const DEFAULT_UNMAPPED_SKILL_MAX_DETAIL_CHARS = 1200;
 
 type TrackedEventType = "assistant_text" | "tool_start" | "tool_done";
 const TRACKED_EVENT_TYPES = new Set<TrackedEventType>(["assistant_text", "tool_start", "tool_done"]);
 
 export type UnmappedSkillReason = "unknown_tool_name" | "assistant_without_tool_name" | "missing_tool_name";
+export const DEFAULT_UNMAPPED_SKILL_CAPTURE_REASONS: UnmappedSkillReason[] = [
+  "unknown_tool_name",
+  "missing_tool_name",
+  "assistant_without_tool_name"
+];
 
 export interface UnmappedSkillLoggerConfig {
   enabled: boolean;
   filePath: string;
+  maxDetailChars: number;
+  captureReasons: UnmappedSkillReason[];
 }
 
 export type RelativeLogPathBase = "workspace" | "global";
@@ -37,15 +45,23 @@ export interface UnmappedSkillRecord {
   isoTime: string;
   runtime: RawRuntimeEvent["runtime"];
   agentRuntimeId: string;
+  sessionRuntimeId?: string | null;
   eventType: RawRuntimeEvent["type"];
   toolName: string | null;
   mappedSkill: SkillKind | null;
   reason: UnmappedSkillReason;
   detail?: string;
+  detailOriginalLength?: number;
+  detailTruncated?: boolean;
   invokedAgentHint?: string | null;
   invokedSkillHint?: string | null;
   invokedAgentMdId?: string | null;
   invokedSkillMdId?: string | null;
+}
+
+interface BuildRecordOptions {
+  captureReasons?: readonly UnmappedSkillReason[];
+  maxDetailChars?: number;
 }
 
 function normalizeToolName(toolName: string | undefined): string | null {
@@ -53,7 +69,62 @@ function normalizeToolName(toolName: string | undefined): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-export function buildUnmappedSkillRecord(event: RawRuntimeEvent): UnmappedSkillRecord | null {
+function clampMaxDetailChars(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_UNMAPPED_SKILL_MAX_DETAIL_CHARS;
+  }
+  const floored = Math.floor(value);
+  if (floored <= 0) {
+    return 0;
+  }
+  return floored;
+}
+
+function normalizeCaptureReasons(reasons: readonly UnmappedSkillReason[] | undefined): Set<UnmappedSkillReason> {
+  const source = reasons && reasons.length > 0 ? reasons : DEFAULT_UNMAPPED_SKILL_CAPTURE_REASONS;
+  return new Set(source);
+}
+
+function trimDetail(
+  detail: string | undefined,
+  maxDetailChars: number
+): Pick<UnmappedSkillRecord, "detail" | "detailOriginalLength" | "detailTruncated"> {
+  if (typeof detail !== "string") {
+    return {};
+  }
+
+  const originalLength = detail.length;
+  if (maxDetailChars <= 0) {
+    return {
+      detailOriginalLength: originalLength,
+      detailTruncated: originalLength > 0
+    };
+  }
+
+  if (originalLength <= maxDetailChars) {
+    return {
+      detail
+    };
+  }
+
+  return {
+    detail: detail.slice(0, maxDetailChars),
+    detailOriginalLength: originalLength,
+    detailTruncated: true
+  };
+}
+
+function normalizeLoggerConfig(config: UnmappedSkillLoggerConfig): UnmappedSkillLoggerConfig {
+  const maxDetailChars = clampMaxDetailChars(config.maxDetailChars);
+  const captureReasons = [...normalizeCaptureReasons(config.captureReasons)];
+  return {
+    ...config,
+    maxDetailChars,
+    captureReasons
+  };
+}
+
+export function buildUnmappedSkillRecord(event: RawRuntimeEvent, options?: BuildRecordOptions): UnmappedSkillRecord | null {
   if (!TRACKED_EVENT_TYPES.has(event.type as TrackedEventType)) {
     return null;
   }
@@ -71,16 +142,24 @@ export function buildUnmappedSkillRecord(event: RawRuntimeEvent): UnmappedSkillR
     reason = "assistant_without_tool_name";
   }
 
+  const captureReasons = normalizeCaptureReasons(options?.captureReasons);
+  if (!captureReasons.has(reason)) {
+    return null;
+  }
+
+  const detailFields = trimDetail(event.detail, clampMaxDetailChars(options?.maxDetailChars));
+
   return {
     ts: event.ts,
     isoTime: new Date(event.ts).toISOString(),
     runtime: event.runtime,
     agentRuntimeId: event.agentRuntimeId,
+    sessionRuntimeId: event.sessionRuntimeId ?? null,
     eventType: event.type,
     toolName,
     mappedSkill,
     reason,
-    detail: event.detail,
+    ...detailFields,
     invokedAgentHint: event.invokedAgentHint ?? null,
     invokedSkillHint: event.invokedSkillHint ?? null,
     invokedAgentMdId: event.invokedAgentMdId ?? null,
@@ -131,11 +210,11 @@ export class UnmappedSkillLogger {
 
   constructor(output: OutputLike, config: UnmappedSkillLoggerConfig) {
     this.output = output;
-    this.config = config;
+    this.config = normalizeLoggerConfig(config);
   }
 
   updateConfig(next: UnmappedSkillLoggerConfig): void {
-    this.config = next;
+    this.config = normalizeLoggerConfig(next);
   }
 
   capture(event: RawRuntimeEvent): void {
@@ -143,7 +222,10 @@ export class UnmappedSkillLogger {
       return;
     }
 
-    const record = buildUnmappedSkillRecord(event);
+    const record = buildUnmappedSkillRecord(event, {
+      captureReasons: this.config.captureReasons,
+      maxDetailChars: this.config.maxDetailChars
+    });
     if (!record) {
       return;
     }

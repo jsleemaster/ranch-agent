@@ -16,6 +16,7 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed).not.toBeNull();
     expect(parsed?.type).toBe("tool_start");
     expect(parsed?.agentRuntimeId).toBe("alpha");
+    expect(parsed?.sessionRuntimeId).toBe("alpha");
     expect(parsed?.toolName).toBe("Read");
     expect(parsed?.filePath).toBe("src/app.ts");
   });
@@ -89,6 +90,7 @@ describe("parseClaudeJsonlLine", () => {
     expect(parsed?.toolName).toBe("Task");
     expect(parsed?.toolId).toBe("toolu_1");
     expect(parsed?.agentRuntimeId).toBe("sess-1");
+    expect(parsed?.sessionRuntimeId).toBe("sess-1");
     expect(parsed?.branchName).toBe("main");
     expect(parsed?.invokedAgentHint).toBe("reviewer");
   });
@@ -173,5 +175,6 @@ describe("parseClaudeJsonlLine", () => {
     const parsed = parseClaudeJsonlLine(line, { fallbackAgentRuntimeId: "file-stable-id" });
     expect(parsed).not.toBeNull();
     expect(parsed?.agentRuntimeId).toBe("file-stable-id");
+    expect(parsed?.sessionRuntimeId).toBeNull();
   });
 });

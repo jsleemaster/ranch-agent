@@ -12,6 +12,14 @@ interface RuntimeHubHandlers {
   onError?: (error: unknown) => void;
 }
 
+interface PendingToolStart {
+  startTs: number;
+  toolId: string | null;
+  toolName: string | null;
+  toolIdKey: string | null;
+  toolNameKey: string | null;
+}
+
 interface WatchedSource {
   filePath: string;
   offset: number;
@@ -19,6 +27,8 @@ interface WatchedSource {
   nextRetryAt: number;
   didReportError: boolean;
 }
+
+const MAX_PENDING_TOOL_STARTS_PER_AGENT = 256;
 
 function initialOffset(filePath: string): number {
   try {
@@ -61,6 +71,19 @@ function normalizePaths(filePaths: string[]): string[] {
   return ordered;
 }
 
+function normalizeToolValue(raw: string | undefined): string | null {
+  if (!raw) {
+    return null;
+  }
+  const normalized = raw.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeToolMatchKey(raw: string | undefined): string | null {
+  const value = normalizeToolValue(raw);
+  return value ? value.toLowerCase() : null;
+}
+
 export function stableAgentRuntimeIdForSource(filePath: string): string {
   const base = path
     .basename(filePath)
@@ -84,8 +107,9 @@ export class ClaudeJsonlRuntimeHub {
 
   private readonly eventBuffer: RawRuntimeEvent[] = [];
   private readonly lastActivityByAgent = new Map<string, number>();
+  private readonly currentSessionRuntimeIdByAgent = new Map<string, string | null>();
   private readonly idleAgents = new Set<string>();
-  private readonly toolInFlightByAgent = new Map<string, number>();
+  private readonly pendingToolStartsByAgent = new Map<string, PendingToolStart[]>();
   private readonly sources = new Map<string, WatchedSource>();
   private sourceCursor = 0;
 
@@ -116,8 +140,9 @@ export class ClaudeJsonlRuntimeHub {
     this.pollInFlight = false;
 
     this.lastActivityByAgent.clear();
+    this.currentSessionRuntimeIdByAgent.clear();
     this.idleAgents.clear();
-    this.toolInFlightByAgent.clear();
+    this.pendingToolStartsByAgent.clear();
     this.sources.clear();
     this.sourceCursor = 0;
 
@@ -254,27 +279,42 @@ export class ClaudeJsonlRuntimeHub {
         continue;
       }
 
-      const sourceEvent = {
+      let sourceEvent: RawRuntimeEvent = {
         ...event,
         // Keep runtime identity stable per JSONL file to avoid request/session key churn.
         agentRuntimeId: fallbackAgentId,
-        sourcePath: source.filePath
+        sessionRuntimeId: normalizeToolValue(event.sessionRuntimeId ?? undefined) ??
+          this.currentSessionRuntimeIdByAgent.get(fallbackAgentId) ??
+          null,
+        sourcePath: source.filePath,
+        ingestSource: "jsonl"
       };
 
-      this.registerActivity(sourceEvent.agentRuntimeId, sourceEvent.ts, sourceEvent.type);
+      if (sourceEvent.sessionRuntimeId) {
+        this.currentSessionRuntimeIdByAgent.set(sourceEvent.agentRuntimeId, sourceEvent.sessionRuntimeId);
+      }
 
       if (sourceEvent.type === "tool_start") {
-        const current = this.toolInFlightByAgent.get(sourceEvent.agentRuntimeId) ?? 0;
-        this.toolInFlightByAgent.set(sourceEvent.agentRuntimeId, current + 1);
+        this.recordToolStart(sourceEvent.agentRuntimeId, sourceEvent);
       } else if (sourceEvent.type === "tool_done") {
-        const current = this.toolInFlightByAgent.get(sourceEvent.agentRuntimeId) ?? 0;
-        const next = Math.max(0, current - 1);
-        if (next === 0) {
-          this.toolInFlightByAgent.delete(sourceEvent.agentRuntimeId);
-        } else {
-          this.toolInFlightByAgent.set(sourceEvent.agentRuntimeId, next);
+        const matched = this.consumePendingToolStart(sourceEvent.agentRuntimeId, sourceEvent);
+        if (matched) {
+          if (!normalizeToolValue(sourceEvent.toolName) && matched.toolName) {
+            sourceEvent = {
+              ...sourceEvent,
+              toolName: matched.toolName
+            };
+          }
+          if (!normalizeToolValue(sourceEvent.toolId) && matched.toolId) {
+            sourceEvent = {
+              ...sourceEvent,
+              toolId: matched.toolId
+            };
+          }
         }
       }
+
+      this.registerActivity(sourceEvent.agentRuntimeId, sourceEvent.ts, sourceEvent.type);
 
       if (sourceEvent.type === "turn_waiting") {
         this.idleAgents.add(sourceEvent.agentRuntimeId);
@@ -295,7 +335,9 @@ export class ClaudeJsonlRuntimeHub {
       this.idleAgents.delete(agentRuntimeId);
       this.pushEvent({
         runtime: "claude-jsonl",
+        ingestSource: "jsonl",
         agentRuntimeId,
+        sessionRuntimeId: this.currentSessionRuntimeIdByAgent.get(agentRuntimeId) ?? null,
         ts,
         type: "turn_active",
         detail: "activity resumed"
@@ -310,14 +352,16 @@ export class ClaudeJsonlRuntimeHub {
 
     const now = Date.now();
     for (const [agentRuntimeId, lastTs] of this.lastActivityByAgent.entries()) {
-      if ((this.toolInFlightByAgent.get(agentRuntimeId) ?? 0) > 0) {
+      if (this.pendingToolStartCount(agentRuntimeId) > 0) {
         continue;
       }
       if (now - lastTs >= IDLE_WAIT_MS && !this.idleAgents.has(agentRuntimeId)) {
         this.idleAgents.add(agentRuntimeId);
         this.pushEvent({
           runtime: "claude-jsonl",
+          ingestSource: "jsonl",
           agentRuntimeId,
+          sessionRuntimeId: this.currentSessionRuntimeIdByAgent.get(agentRuntimeId) ?? null,
           ts: now,
           type: "turn_waiting",
           detail: "idle timeout"
@@ -332,5 +376,54 @@ export class ClaudeJsonlRuntimeHub {
       this.eventBuffer.shift();
     }
     this.handlers.onEvent(event);
+  }
+
+  private pendingToolStartCount(agentRuntimeId: string): number {
+    return this.pendingToolStartsByAgent.get(agentRuntimeId)?.length ?? 0;
+  }
+
+  private recordToolStart(agentRuntimeId: string, event: RawRuntimeEvent): void {
+    const queue = this.pendingToolStartsByAgent.get(agentRuntimeId) ?? [];
+    queue.push({
+      startTs: Number.isFinite(event.ts) ? event.ts : Date.now(),
+      toolId: normalizeToolValue(event.toolId),
+      toolName: normalizeToolValue(event.toolName),
+      toolIdKey: normalizeToolMatchKey(event.toolId),
+      toolNameKey: normalizeToolMatchKey(event.toolName)
+    });
+    if (queue.length > MAX_PENDING_TOOL_STARTS_PER_AGENT) {
+      queue.splice(0, queue.length - MAX_PENDING_TOOL_STARTS_PER_AGENT);
+    }
+    this.pendingToolStartsByAgent.set(agentRuntimeId, queue);
+  }
+
+  private consumePendingToolStart(agentRuntimeId: string, event: RawRuntimeEvent): PendingToolStart | null {
+    const queue = this.pendingToolStartsByAgent.get(agentRuntimeId);
+    if (!queue || queue.length === 0) {
+      return null;
+    }
+
+    const toolId = normalizeToolMatchKey(event.toolId);
+    const toolName = normalizeToolMatchKey(event.toolName);
+
+    let index = -1;
+    if (toolId) {
+      index = queue.findIndex((candidate) => candidate.toolIdKey === toolId);
+    }
+    if (index < 0 && toolName) {
+      index = queue.findIndex((candidate) => candidate.toolNameKey === toolName);
+    }
+    if (index < 0) {
+      index = 0;
+    }
+
+    const [matched] = queue.splice(index, 1);
+    if (queue.length === 0) {
+      this.pendingToolStartsByAgent.delete(agentRuntimeId);
+    } else {
+      this.pendingToolStartsByAgent.set(agentRuntimeId, queue);
+    }
+
+    return matched ?? null;
   }
 }
