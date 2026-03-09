@@ -51,7 +51,7 @@ export function buildWebviewHtml(options: {
   </head>
   <body>
     <h3>Webview bundle not found</h3>
-    <p>Build <code>webview-ui</code> first so Ranch-Agent can render.</p>
+    <p>Build <code>webview-ui</code> first so the control room can render.</p>
   </body>
 </html>`;
   }
@@ -76,7 +76,7 @@ export function buildWebviewHtml(options: {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="${csp}" />
     ${cssLinks}
-    <title>Ranch-Agent</title>
+    <title>Ranch-Agent Control Room</title>
   </head>
   <body>
     <div id="root"></div>

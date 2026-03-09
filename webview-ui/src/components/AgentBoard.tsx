@@ -7,6 +7,7 @@ import {
   teamEmoji,
   teamIconKey
 } from "../world/iconKeys";
+import { levelTier } from "../world/levelTier";
 import IconToken from "./IconToken";
 
 interface AgentBoardProps {
@@ -21,33 +22,33 @@ type AgentBoardTab = "active" | "agents" | "skills";
 function runtimeRoleLabel(role: AgentSnapshot["runtimeRole"]): string {
   switch (role) {
     case "subagent":
-      return "서브";
+      return "지선";
     case "team":
-      return "팀";
+      return "합동";
     default:
-      return "메인";
+      return "본선";
   }
 }
 
 function runtimeRoleEmoji(role: AgentSnapshot["runtimeRole"]): string {
   switch (role) {
     case "subagent":
-      return "🧩";
+      return "🚈";
     case "team":
-      return "🧭";
+      return "🔀";
     default:
-      return "🖥️";
+      return "🚆";
   }
 }
 
 function agentStateLabel(state: AgentSnapshot["state"]): string {
   switch (state) {
     case "active":
-      return "일함";
+      return "운행 중";
     case "completed":
-      return "마침";
+      return "종점 도착";
     default:
-      return "쉬는중";
+      return "신호 대기";
   }
 }
 
@@ -94,36 +95,40 @@ export default function AgentBoard({
           className={`tab-btn ${activeTab === "active" ? "on" : ""}`}
           onClick={() => setActiveTab("active")}
         >
-          🐮 일꾼 ({agents.length})
+          <span className="tab-btn-icon">🚆</span>
+          <span className="tab-btn-label" title={`편성 ${agents.length}`}>편성</span>
         </button>
         <button 
           className={`tab-btn ${activeTab === "agents" ? "on" : ""}`}
           onClick={() => setActiveTab("agents")}
         >
-          🤖 에이전트 목록 ({agentMds.length})
+          <span className="tab-btn-icon">🗂️</span>
+          <span className="tab-btn-label" title={`배치표 ${agentMds.length}`}>배치표</span>
         </button>
         <button 
           className={`tab-btn ${activeTab === "skills" ? "on" : ""}`}
           onClick={() => setActiveTab("skills")}
         >
-          🛠️ 스킬 목록 ({skillMds.length})
+          <span className="tab-btn-icon">🛠️</span>
+          <span className="tab-btn-label" title={`설비 ${skillMds.length}`}>설비</span>
         </button>
       </div>
 
       <div className="agent-board-content">
         {activeTab === "active" && (
           <div className="agent-cards-grid">
-            {agents.length === 0 && <div className="empty-hint">실시간 일감 대기 중</div>}
+            {agents.length === 0 && <div className="empty-hint">실시간 편성 대기 중</div>}
             {agents.map((agent) => {
               const teamIcon = iconUrl(assets, teamIconKey(agent));
+              const tier = levelTier(agent.growthLevel);
               return (
                 <div 
                   key={agent.agentId} 
-                  className={`agent-card ${agent.state} growth-${agent.growthStage} ${agent.mainBranchRisk ? "branch-risk" : ""}`}
-                  title={`Agent: ${agent.agentId}\n상태: ${agentStateLabel(agent.state)}\nRole: ${runtimeRoleLabel(agent.runtimeRole)}\nTarget: ${agent.branchName}\nMDs: ${agent.agentMdCallsTotal}`}
+                  className={`agent-card ${agent.state} growth-${agent.growthStage} level-tier-${tier} ${agent.mainBranchRisk ? "branch-risk" : ""}`}
+                  title={`편성: ${agent.agentId}\n상태: ${agentStateLabel(agent.state)}\n역할: ${runtimeRoleLabel(agent.runtimeRole)}\n대상 브랜치: ${agent.branchName}\n에이전트 지침 호출: ${agent.agentMdCallsTotal}`}
                 >
                   <div className="agent-card-top">
-                    <div className="agent-level-badge" title={`레벨: ${agent.growthLevel}`}>
+                    <div className={`agent-level-badge level-tier-${tier}`} title={`레벨: ${agent.growthLevel}`}>
                       <span className="agent-level-text">LV {agent.growthLevel}</span>
                     </div>
 
@@ -135,17 +140,11 @@ export default function AgentBoard({
                       {agent.state === "active" && <div className="state-ring state-active" />}
                     </div>
                   </div>
-
-                  {agent.state === "completed" && (
-                    <div className="agent-complete-badge" title="완료된 세션">
-                      마침
-                    </div>
-                  )}
                   
                   <IconToken 
                     src={teamIcon} 
                     fallback={agentAvatarEmoji(agent) || teamEmoji(agent)}
-                    title={`에이전트 ID: ${agent.agentId}\n목표 브랜치: ${agent.branchName}`} 
+                    title={`편성 ID: ${agent.agentId}\n대상 브랜치: ${agent.branchName}`} 
                     className="agent-main-icon"
                     autoTrim={true}
                     minAutoScale={2.8}
@@ -154,8 +153,8 @@ export default function AgentBoard({
 
                   <div className="agent-card-bottom">
                     {(agent.totalTokensTotal ?? 0) > 0 && (
-                      <div className="agent-token-badge" title={`사료 소비: ${(agent.totalTokensTotal ?? 0).toLocaleString()} 토큰`}>
-                        🌾 {(agent.totalTokensTotal ?? 0) >= 1000
+                      <div className="agent-token-badge" title={`누적 처리량: ${(agent.totalTokensTotal ?? 0).toLocaleString()} 토큰`}>
+                        처리량 {(agent.totalTokensTotal ?? 0) >= 1000
                           ? `${((agent.totalTokensTotal ?? 0) / 1000).toFixed(1)}K`
                           : agent.totalTokensTotal}
                       </div>
@@ -171,7 +170,7 @@ export default function AgentBoard({
           <div className="agent-md-sections">
             {topAgentMds.length > 0 && (
               <div className="usage-ranking">
-                <div className="ranking-title">🏆 인기 에이전트 (MD)</div>
+                <div className="ranking-title">🏆 자주 호출된 배치 지침</div>
                 <div className="ranking-list">
                   {topAgentMds.map((md, i) => (
                     <div key={md.id} className={`ranking-item top-${i+1}`}>
@@ -185,9 +184,9 @@ export default function AgentBoard({
             )}
 
             <div className="md-catalog-section">
-              <div className="md-section-label">Agent MD Catalog</div>
+              <div className="md-section-label">배치 지침 목록</div>
               <div className="md-chip-row">
-                {agentMds.length === 0 && <div className="empty-catalog-hint">No agent MDs found</div>}
+                {agentMds.length === 0 && <div className="empty-catalog-hint">감지된 배치 지침이 없습니다</div>}
                 {agentMds.map(md => (
                   <div key={md.id} className="agent-md-chip" title={md.fileName}>
                     {md.label}
@@ -202,7 +201,7 @@ export default function AgentBoard({
           <div className="agent-md-sections">
             {topSkills.length > 0 && (
               <div className="usage-ranking">
-                <div className="ranking-title">🔥 자주 사용된 기술 (Skill)</div>
+                <div className="ranking-title">🔥 자주 가동된 설비 지침</div>
                 <div className="ranking-list">
                   {topSkills.map((s, i) => (
                     <div key={s.id} className={`ranking-item top-${i+1}`}>
@@ -216,9 +215,9 @@ export default function AgentBoard({
             )}
 
             <div className="md-catalog-section">
-              <div className="md-section-label">Skill MD Catalog</div>
+              <div className="md-section-label">설비 지침 목록</div>
               <div className="md-chip-row">
-                {skillMds.length === 0 && <div className="empty-catalog-hint">No skill MDs found</div>}
+                {skillMds.length === 0 && <div className="empty-catalog-hint">감지된 설비 지침이 없습니다</div>}
                 {skillMds.map(md => (
                   <div key={md.id} className="agent-md-chip skill-md" title={md.fileName}>
                     {md.label}

@@ -71,6 +71,15 @@ function compactDetail(value: string | undefined): string {
   return `${normalized.slice(0, 25)}...`;
 }
 
+function feedKindLabel(event: FeedEvent): string {
+  switch (event.kind) {
+    case "session_rollover":
+      return "회차 전환";
+    default:
+      return `${skillCode(event.skill)}${gateCode(event.hookGate)}`;
+  }
+}
+
 export default function LiveFeedPanel({
   events,
   assets,
@@ -82,24 +91,25 @@ export default function LiveFeedPanel({
   return (
     <div className={containerClass}>
       {ordered.map((event) => {
+        const isStatusEvent = event.kind === "session_rollover";
         const skillIcon = iconUrl(assets, skillIconKey(event.skill));
         const gateIcon = iconUrl(assets, gateIconKey(event.hookGate));
         const zoneIcon = iconUrl(assets, zoneIconKey(event.zoneId));
-        const code = `${skillCode(event.skill)}${gateCode(event.hookGate)}`;
+        const code = feedKindLabel(event);
         const detail = compactDetail(event.text);
         const stage = event.growthStage ?? "seed";
 
         const tooltip = [
           `time: ${new Date(event.ts).toISOString()}`,
-          `agent: ${event.agentId}`,
-          `branch: ${event.branchName ?? "unknown"}`,
-          `main-risk: ${event.mainBranchRisk ? "yes" : "no"}`,
-          `agent-md: ${event.invokedAgentMdId ?? "none"}`,
-          `skill: ${event.skill ?? "none"}`,
-          `gate: ${event.hookGate ?? "none"}`,
-          `zone: ${zoneLabel(event.zoneId)}`,
-          `growth: ${stage}`,
-          event.text ? `detail: ${event.text}` : ""
+          `편성: ${event.agentId}`,
+          `브랜치: ${event.branchName ?? "unknown"}`,
+          `본선 위험: ${event.mainBranchRisk ? "yes" : "no"}`,
+          `배치 지침: ${event.invokedAgentMdId ?? "none"}`,
+          `단계: ${event.skill ?? "none"}`,
+          `관문: ${event.hookGate ?? "none"}`,
+          `구간: ${zoneLabel(event.zoneId)}`,
+          `등급: ${stage}`,
+          event.text ? `상세: ${event.text}` : ""
         ]
           .filter(Boolean)
           .join("\n");
@@ -107,36 +117,42 @@ export default function LiveFeedPanel({
         return (
           <div
             key={event.id}
-            className="feed-row"
+            className={`feed-row ${isStatusEvent ? `feed-row-${event.kind}` : ""}`}
             title={tooltip}
           >
             <span className="feed-time">{formatTime(event.ts)}</span>
             <span className="feed-agent">{shortAgentId(event.agentId)}</span>
-            <span className="feed-code">{code}</span>
-            <IconToken 
-              src={skillIcon} 
-              fallback={skillEmoji(event.skill)} 
-              title={`skill: ${event.skill ?? "none"}`} 
-              className="mini-icon" 
-            />
-            <IconToken 
-              src={gateIcon} 
-              fallback={gateEmoji(event.hookGate)} 
-              title={`gate: ${event.hookGate ?? "none"}`} 
-              className="mini-icon" 
-            />
-            <IconToken 
-              src={zoneIcon} 
-              fallback={zoneEmoji(event.zoneId)} 
-              title={`zone: ${zoneLabel(event.zoneId)}`} 
-              className="mini-icon" 
-            />
-            <span className={`feed-growth growth-${stage}`}>{growthEmoji(stage)}</span>
-            <span className="feed-detail">{detail || "기록 없음"}</span>
+            <span className={`feed-code ${isStatusEvent ? "feed-code-status" : ""}`}>{code}</span>
+            {isStatusEvent ? (
+              <span className={`feed-status-marker ${event.kind}`}>⇄</span>
+            ) : (
+              <>
+                <IconToken
+                  src={skillIcon}
+                  fallback={skillEmoji(event.skill)}
+                  title={`skill: ${event.skill ?? "none"}`}
+                  className="mini-icon"
+                />
+                <IconToken
+                  src={gateIcon}
+                  fallback={gateEmoji(event.hookGate)}
+                  title={`gate: ${event.hookGate ?? "none"}`}
+                  className="mini-icon"
+                />
+                <IconToken
+                  src={zoneIcon}
+                  fallback={zoneEmoji(event.zoneId)}
+                  title={`zone: ${zoneLabel(event.zoneId)}`}
+                  className="mini-icon"
+                />
+                <span className={`feed-growth growth-${stage}`}>{growthEmoji(stage)}</span>
+              </>
+            )}
+            <span className="feed-detail">{detail || "상세 없음"}</span>
           </div>
         );
       })}
-      {ordered.length === 0 ? <div className="empty-hint" title="작업 일지는 첫 이벤트가 오면 채워집니다">작업 일지 대기 중</div> : null}
+      {ordered.length === 0 ? <div className="empty-hint" title="관제 로그는 첫 이벤트가 오면 채워집니다">관제 로그 대기 중</div> : null}
     </div>
   );
 }
