@@ -10,6 +10,9 @@
     "build": "npm --prefix webview-ui run build && npm --prefix extension run build",
     "watch": "npm --prefix webview-ui run build:watch",
     "sync:installed": "bash scripts/sync-installed-local.sh",
-    "dev:main-vscode": "bash scripts/dev-main-vscode.sh"
+    "dev:main-vscode": "bash scripts/dev-main-vscode.sh",
+    "omx:status": "bash -lc 'source .venv-ohmy/bin/activate && omx --status'",
+    "omx:skills": "bash -lc 'source .venv-ohmy/bin/activate && omx --skills'",
+    "omx:setup": "bash -lc 'source .venv-ohmy/bin/activate && omx-setup'"
   }
 }
