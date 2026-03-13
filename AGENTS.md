@@ -19,7 +19,9 @@ Run commands from the repository root unless noted.
 - `npm --prefix extension run test`: runs extension tests (Vitest).
 - `npm --prefix extension run typecheck`: TypeScript check for extension.
 - `npm --prefix webview-ui run typecheck`: TypeScript check for webview UI.
-- `npm run dev:main-vscode`: local “main VS Code” sync loop.
+- `npm run sync:installed`: continuously rsyncs `extension/` into the local installed extension directory.
+- `npm run dev:main-vscode`: starts webview watch, extension watch, and installed-extension sync loop together.
+- `npm run prepare:rail-assets`: prepares user-pack rail assets from source PNGs (`train_front`, `train_side`, `rail_stage_bg`).
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript (`.ts` / `.tsx`) with strict type checks.

@@ -24,6 +24,9 @@ export interface SkillMdCatalogItem {
 
 export interface AgentSnapshot {
   agentId: string;
+  displayName: string;
+  displayShortName: string;
+  rawShortId: string;
   teamId: string;
   icon: string;
   color: string;
@@ -70,6 +73,9 @@ export interface AgentSnapshot {
 export interface SessionHistorySnapshot {
   sessionId: string;
   lineageId: string;
+  displayName: string;
+  displayShortName: string;
+  rawShortId: string;
   runtimeRole: AgentRuntimeRole;
   startedAtTs: number;
   endedAtTs: number;
@@ -96,6 +102,9 @@ export interface FeedEvent {
   id: string;
   ts: number;
   agentId: string;
+  displayName: string;
+  displayShortName: string;
+  rawShortId: string;
   kind?: FeedEventKind;
   skill: SkillKind | null;
   runtimeSignal?: RuntimeSignalKind | null;

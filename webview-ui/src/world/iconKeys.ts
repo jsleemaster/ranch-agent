@@ -1,5 +1,6 @@
 import type { AgentSnapshot, GrowthStage, HookGateState, SkillKind } from "@shared/domain";
 import type { WebviewAssetCatalog } from "@shared/assets";
+import { defaultRailFrontSprite, defaultRailSideSprite } from "./railSpriteDataUrl";
 
 const SKILL_EMOJI: Record<SkillKind, string> = {
   read: "📖",
@@ -89,6 +90,10 @@ export function iconUrl(catalog: WebviewAssetCatalog, key: string): string | und
   return catalog.icons[key];
 }
 
+export function railFrontIconUrl(_catalog: WebviewAssetCatalog, agent: AgentSnapshot): string | undefined {
+  return defaultRailFrontSprite(agent.runtimeRole);
+}
+
 export function spriteUrl(catalog: WebviewAssetCatalog, state: AgentSnapshot["state"]): string | undefined {
   if (catalog.source === "placeholder-pack" || catalog.source === "primitive") {
     return undefined;
@@ -96,11 +101,19 @@ export function spriteUrl(catalog: WebviewAssetCatalog, state: AgentSnapshot["st
   return catalog.sprites[state === "active" ? "agent_active" : "agent_idle"];
 }
 
+export function railSideSpriteUrl(_catalog: WebviewAssetCatalog, agent: AgentSnapshot): string | undefined {
+  return defaultRailSideSprite(agent.runtimeRole);
+}
+
 export function tileUrl(catalog: WebviewAssetCatalog, zoneId: string): string | undefined {
   if (catalog.source === "placeholder-pack" || catalog.source === "primitive") {
     return undefined;
   }
   return catalog.tiles[`zone_${zoneId}`];
+}
+
+export function railStageBackgroundUrl(catalog: WebviewAssetCatalog): string | undefined {
+  return catalog.tiles.rail_stage_bg;
 }
 
 export function teamEmoji(agent: AgentSnapshot): string {

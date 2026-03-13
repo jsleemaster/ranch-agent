@@ -20,6 +20,39 @@ const GROWTH_STAGES = new Set<GrowthStage>(["seed", "sprout", "grow", "harvest"]
 const SESSION_CLOSE_REASONS = new Set(["conversation_rollover", "work_finished", "stale_cleanup"]);
 const GROWTH_LEVEL_SPAN = 35;
 
+function fallbackRawShortId(value: string): string {
+  const normalized = value.trim();
+  if (normalized.length <= 12) {
+    return normalized;
+  }
+  if (normalized.startsWith("agent-")) {
+    return `agent-${normalized.slice(6, 12)}`;
+  }
+  const dash = normalized.indexOf("-");
+  if (dash > 0 && dash <= 12) {
+    return normalized.slice(0, dash);
+  }
+  return normalized.slice(0, 8);
+}
+
+function fallbackDisplayNameForRole(role: AgentRuntimeRole): string {
+  switch (role) {
+    case "subagent":
+      return "보조 작업자";
+    case "team":
+      return "공동 작업자";
+    default:
+      return "메인 작업자";
+  }
+}
+
+function shortenDisplayName(value: string, maxLength = 16): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+}
+
 function asAgentState(value: unknown): AgentSnapshot["state"] {
   if (value === "active" || value === "waiting" || value === "completed") {
     return value;
@@ -142,8 +175,26 @@ function normalizeAgent(agent: AgentSnapshot): AgentSnapshot {
   const currentAgentMdId = typeof candidate.currentAgentMdId === "string" ? candidate.currentAgentMdId : null;
   const currentSkillMdId = typeof candidate.currentSkillMdId === "string" ? candidate.currentSkillMdId : null;
   const skillUsageByKind = normalizeSkillUsageByKind(candidate.skillUsageByKind);
+  const displayName =
+    typeof (candidate as { displayName?: unknown }).displayName === "string" &&
+    (candidate as { displayName?: string }).displayName!.trim().length > 0
+      ? (candidate as { displayName: string }).displayName
+      : fallbackDisplayNameForRole(runtimeRole);
+  const rawShortId =
+    typeof (candidate as { rawShortId?: unknown }).rawShortId === "string" &&
+    (candidate as { rawShortId?: string }).rawShortId!.trim().length > 0
+      ? (candidate as { rawShortId: string }).rawShortId
+      : fallbackRawShortId(agent.agentId);
+  const displayShortName =
+    typeof (candidate as { displayShortName?: unknown }).displayShortName === "string" &&
+    (candidate as { displayShortName?: string }).displayShortName!.trim().length > 0
+      ? (candidate as { displayShortName: string }).displayShortName
+      : shortenDisplayName(displayName);
   return {
     ...agent,
+    displayName,
+    displayShortName,
+    rawShortId,
     state: asAgentState((candidate as { state?: unknown }).state),
     runtimeRole,
     branchName,
@@ -194,6 +245,27 @@ function normalizeSession(session: SessionHistorySnapshot): SessionHistorySnapsh
     sessionId: typeof session.sessionId === "string" && session.sessionId.trim().length > 0 ? session.sessionId : "unknown",
     lineageId:
       typeof session.lineageId === "string" && session.lineageId.trim().length > 0 ? session.lineageId : "unknown",
+    displayName:
+      typeof (session as { displayName?: unknown }).displayName === "string" &&
+      (session as { displayName?: string }).displayName!.trim().length > 0
+        ? (session as { displayName: string }).displayName
+        : fallbackDisplayNameForRole(asRuntimeRole(session.runtimeRole)),
+    displayShortName:
+      typeof (session as { displayShortName?: unknown }).displayShortName === "string" &&
+      (session as { displayShortName?: string }).displayShortName!.trim().length > 0
+        ? (session as { displayShortName: string }).displayShortName
+        : shortenDisplayName(
+            typeof (session as { displayName?: unknown }).displayName === "string"
+              ? (session as { displayName: string }).displayName
+              : fallbackDisplayNameForRole(asRuntimeRole(session.runtimeRole))
+          ),
+    rawShortId:
+      typeof (session as { rawShortId?: unknown }).rawShortId === "string" &&
+      (session as { rawShortId?: string }).rawShortId!.trim().length > 0
+        ? (session as { rawShortId: string }).rawShortId
+        : fallbackRawShortId(
+            typeof session.lineageId === "string" && session.lineageId.trim().length > 0 ? session.lineageId : "unknown"
+          ),
     runtimeRole: asRuntimeRole(session.runtimeRole),
     startedAtTs,
     endedAtTs,
@@ -265,6 +337,64 @@ function normalizeBudget(budget: StatuslineBudgetSnapshot): StatuslineBudgetSnap
     costUsd:
       typeof budget.costUsd === "number" && Number.isFinite(budget.costUsd) ? budget.costUsd : undefined
   };
+}
+
+function normalizeFeedEvent(event: FeedEvent): FeedEvent {
+  const displayName =
+    typeof (event as { displayName?: unknown }).displayName === "string" &&
+    (event as { displayName?: string }).displayName!.trim().length > 0
+      ? (event as { displayName: string }).displayName
+      : "메인 작업자";
+  const rawShortId =
+    typeof (event as { rawShortId?: unknown }).rawShortId === "string" &&
+    (event as { rawShortId?: string }).rawShortId!.trim().length > 0
+      ? (event as { rawShortId: string }).rawShortId
+      : fallbackRawShortId(event.agentId);
+
+  return {
+    ...event,
+    displayName,
+    displayShortName:
+      typeof (event as { displayShortName?: unknown }).displayShortName === "string" &&
+      (event as { displayShortName?: string }).displayShortName!.trim().length > 0
+        ? (event as { displayShortName: string }).displayShortName
+        : shortenDisplayName(displayName),
+    rawShortId
+  };
+}
+
+function applyUniqueDisplayNames<T extends { displayName: string; displayShortName: string; rawShortId: string }>(
+  items: T[],
+  keyOf: (item: T) => string
+): T[] {
+  const grouped = new Map<string, Array<{ key: string; rawShortId: string }>>();
+  for (const item of items) {
+    const base = item.displayName.trim() || "메인 작업자";
+    const key = keyOf(item);
+    const existing = grouped.get(base) ?? [];
+    if (!existing.some((entry) => entry.key === key)) {
+      existing.push({ key, rawShortId: item.rawShortId });
+      grouped.set(base, existing);
+    }
+  }
+
+  const numbering = new Map<string, string>();
+  for (const [base, entries] of grouped.entries()) {
+    const ordered = [...entries].sort((a, b) => a.rawShortId.localeCompare(b.rawShortId) || a.key.localeCompare(b.key));
+    ordered.forEach((entry, index) => {
+      numbering.set(`${base}::${entry.key}`, ordered.length > 1 ? `${base} #${index + 1}` : base);
+    });
+  }
+
+  return items.map((item) => {
+    const base = item.displayName.trim() || "메인 작업자";
+    const numbered = numbering.get(`${base}::${keyOf(item)}`) ?? base;
+    return {
+      ...item,
+      displayName: numbered,
+      displayShortName: shortenDisplayName(numbered)
+    };
+  });
 }
 
 export interface WorldSnapshot {
@@ -358,6 +488,7 @@ export class WorldState {
           }
           this.budgets.set(nextBudget.lineageId, nextBudget);
         }
+        this.feed.splice(0, this.feed.length);
         this.sessions.sort((a, b) => b.endedAtTs - a.endedAtTs);
         if (this.sessions.length > SESSION_LIMIT) {
           this.sessions.splice(SESSION_LIMIT);
@@ -452,7 +583,7 @@ export class WorldState {
                 : null,
             growthStage: asGrowthStage(message.event.growthStage)
           };
-          this.feed.push(eventWithStage);
+          this.feed.push(normalizeFeedEvent(eventWithStage));
         }
         if (this.feed.length > FEED_LIMIT) {
           this.feed.shift();
@@ -467,16 +598,23 @@ export class WorldState {
   }
 
   getSnapshot(): WorldSnapshot {
+    const agents = applyUniqueDisplayNames(
+      [...this.agents.values()].sort((a, b) => b.lastEventTs - a.lastEventTs),
+      (agent) => agent.agentId
+    );
+    const sessions = applyUniqueDisplayNames([...this.sessions], (session) => session.lineageId);
+    const feed = applyUniqueDisplayNames([...this.feed], (event) => event.agentId);
+
     return {
-      agents: [...this.agents.values()].sort((a, b) => b.lastEventTs - a.lastEventTs),
+      agents,
       zones: [...this.zones.values()],
       skills: [...this.skills.values()].sort((a, b) => b.usageCount - a.usageCount || a.skill.localeCompare(b.skill)),
       signals: [...this.signals.values()].sort((a, b) => b.usageCount - a.usageCount || a.signal.localeCompare(b.signal)),
-      sessions: [...this.sessions],
+      sessions,
       budgets: [...this.budgets.values()].sort((a, b) => b.updatedAtTs - a.updatedAtTs),
       agentMds: [...this.agentMds],
       skillMds: [...this.skillMds],
-      feed: [...this.feed]
+      feed
     };
   }
 

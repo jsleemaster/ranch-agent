@@ -45,6 +45,30 @@ Core runtime sources:
 - Optional HTTP hooks receiver
 - Optional Claude statusLine bridge with `claude-hud` fan-out wrapper
 - Local debug NDJSON logging under VS Code global storage
+- Rail asset slots with auto-discovery for `train_front` / `train_side` image files
+
+## Custom Rail Assets
+
+Ranch-Agent can swap in custom train art without additional code changes.
+
+Two zero-config filenames are supported out of the box:
+
+- `assets/user-pack/icons/train_front.png`
+- `assets/user-pack/sprites/train_side.png`
+- `assets/user-pack/tiles/rail_stage_bg.png`
+
+If those files exist, Ranch-Agent uses them automatically:
+
+- `train_front` for board cards and summary avatars
+- `train_side` for the live stage train movement
+- `rail_stage_bg` for the stage background plate
+
+Role-specific overrides are also supported:
+
+- `train_front_main`, `train_front_subagent`, `train_front_team`
+- `train_side_main`, `train_side_subagent`, `train_side_team`
+
+If you want explicit mapping instead, update [assets/user-pack/manifest.json](./assets/user-pack/manifest.json).
 
 ## Installation
 

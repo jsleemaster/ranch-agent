@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm --prefix webview-ui run build && npm --prefix extension run build",
     "watch": "npm --prefix webview-ui run build:watch",
+    "prepare:rail-assets": "python3 scripts/prepare_rail_assets.py",
     "sync:installed": "bash scripts/sync-installed-local.sh",
     "dev:main-vscode": "bash scripts/dev-main-vscode.sh",
     "omx:status": "bash -lc 'source .venv-ohmy/bin/activate && omx --status'",

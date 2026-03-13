@@ -29,6 +29,17 @@ function findBuiltAssets(webviewDistDir: string): { scriptPath: string | null; c
   };
 }
 
+function withVersionedQuery(filePath: string, uri: vscode.Uri): string {
+  try {
+    const stat = fs.statSync(filePath);
+    const version = Math.trunc(stat.mtimeMs).toString();
+    const separator = uri.toString().includes("?") ? "&" : "?";
+    return `${uri.toString()}${separator}v=${version}`;
+  } catch {
+    return uri.toString();
+  }
+}
+
 export function buildWebviewHtml(options: {
   webview: vscode.Webview;
   webviewDistDir: string;
@@ -56,8 +67,10 @@ export function buildWebviewHtml(options: {
 </html>`;
   }
 
-  const scriptUri = webview.asWebviewUri(vscode.Uri.file(scriptPath));
-  const cssUris = cssPaths.map((cssPath) => webview.asWebviewUri(vscode.Uri.file(cssPath)).toString());
+  const scriptUri = withVersionedQuery(scriptPath, webview.asWebviewUri(vscode.Uri.file(scriptPath)));
+  const cssUris = cssPaths.map((cssPath) =>
+    withVersionedQuery(cssPath, webview.asWebviewUri(vscode.Uri.file(cssPath)))
+  );
 
   const csp = [
     "default-src 'none'",

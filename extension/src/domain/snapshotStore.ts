@@ -1,4 +1,5 @@
 import type {
+  AgentMdCatalogItem,
   AgentSnapshot,
   AgentRuntimeRole,
   FeedEvent,
@@ -170,8 +171,103 @@ function normalizeSessionRuntimeId(raw: string | null | undefined, lineageId: st
   return normalized.length > 0 ? normalized : lineageId;
 }
 
+function rawShortId(value: string): string {
+  const normalized = value.trim();
+  if (normalized.length <= 12) {
+    return normalized;
+  }
+  if (normalized.startsWith("agent-")) {
+    return `agent-${normalized.slice(6, 12)}`;
+  }
+  const dash = normalized.indexOf("-");
+  if (dash > 0 && dash <= 12) {
+    return normalized.slice(0, dash);
+  }
+  return normalized.slice(0, 8);
+}
+
+function normalizeDisplayText(value: string): string {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function branchDisplayName(branchName: string | null | undefined): string | null {
+  const normalized = (branchName ?? "").trim();
+  if (!normalized) {
+    return null;
+  }
+  const lower = normalized.toLowerCase();
+  const reserved = new Set(["main", "master", "develop", "development", "dev", "trunk"]);
+  const segments = normalized.split("/").filter(Boolean);
+  let lastSegment = segments.pop() ?? normalized;
+  if (reserved.has(lastSegment.toLowerCase())) {
+    return null;
+  }
+  lastSegment = lastSegment
+    .replace(/^(feature|fix|hotfix|chore|refactor|docs|release)[-_]/i, "")
+    .replace(/\b(main|master|develop|development|dev|trunk)\b/gi, "")
+    .trim();
+  if (!lastSegment || reserved.has(lower)) {
+    return null;
+  }
+  const humanized = normalizeDisplayText(lastSegment);
+  if (!humanized) {
+    return null;
+  }
+  const compact = humanized.replace(/\s+/g, "");
+  const generic = new Set([
+    "main",
+    "master",
+    "develop",
+    "development",
+    "dev",
+    "trunk",
+    "default",
+    "workspace",
+    "branch",
+    "codex",
+    "agent",
+    "subagent",
+    "team"
+  ]);
+  if (/^[a-z0-9-]+$/i.test(humanized) && (compact.length <= 3 || generic.has(compact.toLowerCase()))) {
+    return null;
+  }
+  return humanized.length > 0 ? humanized : null;
+}
+
+function mostUsedAgentMdId(callsById: Record<string, number>): string | null {
+  const entries = Object.entries(callsById);
+  if (entries.length === 0) {
+    return null;
+  }
+  entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return entries[0]?.[0] ?? null;
+}
+
+function fallbackDisplayNameForRole(role: AgentRuntimeRole): string {
+  switch (role) {
+    case "subagent":
+      return "보조 작업자";
+    case "team":
+      return "공동 작업자";
+    default:
+      return "메인 작업자";
+  }
+}
+
+function shortenDisplayName(value: string, maxLength = 16): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+}
+
 interface SnapshotDependencies {
   teamResolver: TeamResolver;
+  getAgentMdCatalog?: () => AgentMdCatalogItem[];
 }
 
 export interface SnapshotUpdate {
@@ -191,6 +287,7 @@ export interface StatuslineBudgetUpdate {
 
 export class SnapshotStore {
   private readonly teamResolver: TeamResolver;
+  private readonly getAgentMdCatalog: () => AgentMdCatalogItem[];
 
   private readonly agents = new Map<string, AgentSnapshot>();
   private readonly skillMetrics = new Map<SkillKind, SkillMetricSnapshot>();
@@ -209,6 +306,7 @@ export class SnapshotStore {
 
   constructor(deps: SnapshotDependencies) {
     this.teamResolver = deps.teamResolver;
+    this.getAgentMdCatalog = deps.getAgentMdCatalog ?? (() => []);
 
     for (const skill of SKILL_ORDER) {
       this.skillMetrics.set(skill, {
@@ -224,6 +322,35 @@ export class SnapshotStore {
         usageCount: 0
       });
     }
+  }
+
+  private getAgentMdLabelMap(): Map<string, string> {
+    return new Map(this.getAgentMdCatalog().map((item) => [item.id, item.label]));
+  }
+
+  private resolveDisplayMeta(params: {
+    runtimeRole: AgentRuntimeRole;
+    agentId: string;
+    currentAgentMdId: string | null;
+    agentMdCallsById: Record<string, number>;
+    branchName: string | null;
+  }): Pick<AgentSnapshot, "displayName" | "displayShortName" | "rawShortId"> {
+    const labelMap = this.getAgentMdLabelMap();
+    const currentAgentLabel = params.currentAgentMdId ? labelMap.get(params.currentAgentMdId) ?? null : null;
+    const mostUsedAgentId = mostUsedAgentMdId(params.agentMdCallsById);
+    const mostUsedLabel = mostUsedAgentId ? labelMap.get(mostUsedAgentId) ?? null : null;
+    const branchLabel = branchDisplayName(params.branchName);
+    const displayName =
+      currentAgentLabel ??
+      mostUsedLabel ??
+      (branchLabel ? `${branchLabel} 열차` : null) ??
+      fallbackDisplayNameForRole(params.runtimeRole);
+
+    return {
+      displayName,
+      displayShortName: shortenDisplayName(displayName),
+      rawShortId: rawShortId(params.agentId)
+    };
   }
 
   applyRawEvent(raw: RawRuntimeEvent): SnapshotUpdate {
@@ -351,9 +478,19 @@ export class SnapshotStore {
     const growthLevel = growthLevelForUsage(usageCount);
     const growthLevelUsage = growthLevelUsageForUsage(usageCount);
     const growthStage = growthStageForUsage(usageCount);
+    const displayMeta = this.resolveDisplayMeta({
+      runtimeRole,
+      agentId: raw.agentRuntimeId,
+      currentAgentMdId,
+      agentMdCallsById: nextAgentMdCallsById,
+      branchName
+    });
 
     const agent: AgentSnapshot = {
       agentId: raw.agentRuntimeId,
+      displayName: displayMeta.displayName,
+      displayShortName: displayMeta.displayShortName,
+      rawShortId: displayMeta.rawShortId,
       teamId: team.id,
       icon: team.icon,
       color: team.color,
@@ -435,6 +572,9 @@ export class SnapshotStore {
       id: `${raw.agentRuntimeId}:${raw.ts}:${this.sequence++}`,
       ts: raw.ts,
       agentId: raw.agentRuntimeId,
+      displayName: displayMeta.displayName,
+      displayShortName: displayMeta.displayShortName,
+      rawShortId: displayMeta.rawShortId,
       skill: currentSkill,
       runtimeSignal,
       hookGate: currentHookGate,
@@ -767,9 +907,13 @@ export class SnapshotStore {
 
     const startedAtTs = activeSession?.startedAtTs ?? snapshot?.lastEventTs ?? endTs;
     const endedAtTs = Math.max(endTs, activeSession?.lastEventTs ?? snapshot?.lastEventTs ?? endTs);
+    const displayName = snapshot?.displayName ?? fallbackDisplayNameForRole(activeSession?.runtimeRole ?? snapshot?.runtimeRole ?? "main");
     const archived: SessionHistorySnapshot = {
       sessionId: activeSession?.sessionId ?? lineageId,
       lineageId,
+      displayName,
+      displayShortName: snapshot?.displayShortName ?? shortenDisplayName(displayName),
+      rawShortId: snapshot?.rawShortId ?? rawShortId(lineageId),
       runtimeRole: activeSession?.runtimeRole ?? snapshot?.runtimeRole ?? "main",
       startedAtTs,
       endedAtTs,
@@ -835,10 +979,25 @@ export class SnapshotStore {
   }
 
   private pushFeedEvent(
-    event: Omit<FeedEvent, "id" | "branchName" | "mainBranchRisk" | "invokedAgentMdId" | "invokedSkillMdId">
+    event: Omit<
+      FeedEvent,
+      "id" | "branchName" | "mainBranchRisk" | "invokedAgentMdId" | "invokedSkillMdId" | "displayName" | "displayShortName" | "rawShortId"
+    >
   ): FeedEvent {
+    const displayMeta =
+      this.agents.get(event.agentId) ??
+      this.resolveDisplayMeta({
+        runtimeRole: "main",
+        agentId: event.agentId,
+        currentAgentMdId: null,
+        agentMdCallsById: {},
+        branchName: null
+      });
     const next: FeedEvent = {
       id: `${event.agentId}:${event.ts}:${this.sequence++}`,
+      displayName: displayMeta.displayName,
+      displayShortName: displayMeta.displayShortName,
+      rawShortId: displayMeta.rawShortId,
       branchName: null,
       mainBranchRisk: false,
       invokedAgentMdId: null,

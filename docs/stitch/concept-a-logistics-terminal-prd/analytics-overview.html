@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Workspace AI Analytics Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4c5ce6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111321",
+                        "surface-dark": "#1b1e2e",
+                        "border-dark": "#2e324d",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .heatmap-cell {
+            transition: opacity 0.2s;
+        }
+        .heatmap-cell:hover {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<!-- Top Navigation Bar -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-border-dark px-6 md:px-10 py-3 bg-background-dark">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-3 text-primary">
+<span class="material-symbols-outlined text-3xl">insights</span>
+<h2 class="text-slate-100 text-lg font-bold leading-tight tracking-tight">Workspace AI</h2>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-slate-400 hover:text-white text-sm font-medium transition-colors" href="#">Dashboard</a>
+<a class="text-white text-sm font-medium border-b-2 border-primary pb-1" href="#">Analytics</a>
+<a class="text-slate-400 hover:text-white text-sm font-medium transition-colors" href="#">Agents</a>
+<a class="text-slate-400 hover:text-white text-sm font-medium transition-colors" href="#">Team</a>
+</nav>
+</div>
+<div class="flex flex-1 justify-end gap-4">
+<label class="hidden sm:flex flex-col min-w-40 h-10 max-w-64">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full bg-surface-dark border border-border-dark">
+<div class="text-slate-400 flex items-center justify-center pl-3">
+<span class="material-symbols-outlined text-xl">search</span>
+</div>
+<input class="form-input w-full bg-transparent border-none focus:ring-0 text-slate-100 placeholder:text-slate-500 text-sm" placeholder="Search metrics..."/>
+</div>
+</label>
+<div class="flex gap-2">
+<button class="flex items-center justify-center rounded-lg size-10 bg-surface-dark border border-border-dark text-slate-300 hover:text-white transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="size-10 rounded-full border-2 border-primary overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="User profile avatar icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8QVeYh7QO6P9xced3iHblodADODYZkBSY9ZAnwpK8YlIaKOIghVnApksc4Y_ODgIGKEK7svW9iGBqK6sL16m1yK0MvAatotFOxghuTP_CrDngNApVL7YvFE8ED_mG0jRIWei_95BumwPtVFd3s74AZzB6MsXaOeUdR1OnzITi6ikoEfReAqNK0tw-94JAE0mPJoAWykMHf-IyWbLDzUlsuilxBmOdlaye88D0kBrikKR7RNd58lCnIkghNXpjUUg8L-NUtZ4-t0Y"/>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-1 overflow-y-auto px-6 md:px-10 py-8">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+<div>
+<h1 class="text-3xl font-bold text-slate-100 tracking-tight">Team Performance</h1>
+<p class="text-slate-400 mt-1">High-level resource efficiency and model utilization metrics.</p>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-2 bg-surface-dark border border-border-dark rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">Export Report</button>
+<button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">Live View</button>
+</div>
+</div>
+<!-- 1. Team Performance Overview Metrics -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+<div class="bg-surface-dark p-6 rounded-xl border border-border-dark flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="text-slate-400 text-sm font-medium uppercase tracking-wider">Total Tasks</span>
+<span class="material-symbols-outlined text-primary">task_alt</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-bold text-slate-100">12,482</span>
+<span class="text-emerald-500 text-sm font-bold">+12.4%</span>
+</div>
+</div>
+<div class="bg-surface-dark p-6 rounded-xl border border-border-dark flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="text-slate-400 text-sm font-medium uppercase tracking-wider">Avg. Turn Time</span>
+<span class="material-symbols-outlined text-primary">timer</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-bold text-slate-100">14.2m</span>
+<span class="text-orange-500 text-sm font-bold">-5.2%</span>
+</div>
+</div>
+<div class="bg-surface-dark p-6 rounded-xl border border-border-dark flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="text-slate-400 text-sm font-medium uppercase tracking-wider">Resource Efficiency</span>
+<span class="material-symbols-outlined text-primary">bolt</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-bold text-slate-100">94.2%</span>
+<span class="text-emerald-500 text-sm font-bold">+3.1%</span>
+</div>
+</div>
+<div class="bg-surface-dark p-6 rounded-xl border border-border-dark flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="text-slate-400 text-sm font-medium uppercase tracking-wider">Active Agents</span>
+<span class="material-symbols-outlined text-primary">smart_toy</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-bold text-slate-100">24</span>
+<span class="text-slate-500 text-sm font-medium">No change</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+<!-- 2. Agent Growth Progress Chart -->
+<div class="lg:col-span-2 bg-surface-dark p-6 rounded-xl border border-border-dark">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold text-slate-100">Agent Maturity Progress</h3>
+<div class="flex gap-2 text-xs font-semibold uppercase tracking-tighter">
+<span class="px-2 py-1 bg-primary/20 text-primary rounded">Seed</span>
+<span class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded">Sprout</span>
+<span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded">Bloom</span>
+<span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded">Harvest</span>
+</div>
+</div>
+<div class="relative h-64 w-full flex items-end justify-between gap-4 px-2">
+<div class="absolute inset-0 flex flex-col justify-between py-2 pointer-events-none">
+<div class="border-t border-slate-700/50 w-full h-px"></div>
+<div class="border-t border-slate-700/50 w-full h-px"></div>
+<div class="border-t border-slate-700/50 w-full h-px"></div>
+<div class="border-t border-slate-700/50 w-full h-px"></div>
+</div>
+<!-- Bars Representing Agents -->
+<div class="relative w-full h-full flex items-end justify-around">
+<div class="w-12 bg-primary rounded-t-lg h-[40%] group relative">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 px-2 py-1 rounded text-[10px] whitespace-nowrap border border-primary">Analyst-01</div>
+</div>
+<div class="w-12 bg-blue-500 rounded-t-lg h-[65%] group relative">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 px-2 py-1 rounded text-[10px] whitespace-nowrap border border-blue-400">Writer-B</div>
+</div>
+<div class="w-12 bg-indigo-500 rounded-t-lg h-[85%] group relative">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 px-2 py-1 rounded text-[10px] whitespace-nowrap border border-indigo-400">Coder-V3</div>
+</div>
+<div class="w-12 bg-emerald-500 rounded-t-lg h-[95%] group relative">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 px-2 py-1 rounded text-[10px] whitespace-nowrap border border-emerald-400">Lead-Arch</div>
+</div>
+<div class="w-12 bg-primary rounded-t-lg h-[50%] group relative">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 px-2 py-1 rounded text-[10px] whitespace-nowrap border border-primary">Log-Parse</div>
+</div>
+<div class="w-12 bg-blue-500 rounded-t-lg h-[60%] group relative">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 px-2 py-1 rounded text-[10px] whitespace-nowrap border border-blue-400">Reviewer</div>
+</div>
+</div>
+</div>
+<div class="flex justify-around mt-4 text-xs text-slate-500 font-medium">
+<span>Week 1</span>
+<span>Week 2</span>
+<span>Week 3</span>
+<span>Week 4</span>
+<span>Week 5</span>
+<span>Week 6</span>
+</div>
+</div>
+<!-- 3. Skill Usage Heatmap -->
+<div class="bg-surface-dark p-6 rounded-xl border border-border-dark">
+<h3 class="text-lg font-bold text-slate-100 mb-6">Skill Utilization Heatmap</h3>
+<div class="grid grid-cols-5 gap-2">
+<div class="col-span-1"></div>
+<div class="text-[10px] uppercase text-slate-500 text-center">Mon</div>
+<div class="text-[10px] uppercase text-slate-500 text-center">Tue</div>
+<div class="text-[10px] uppercase text-slate-500 text-center">Wed</div>
+<div class="text-[10px] uppercase text-slate-500 text-center">Thu</div>
+<div class="text-xs text-slate-400 flex items-center pr-2">Read</div>
+<div class="h-10 bg-primary/20 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/60 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/40 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/90 rounded-md heatmap-cell"></div>
+<div class="text-xs text-slate-400 flex items-center pr-2">Write</div>
+<div class="h-10 bg-primary/40 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/20 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/80 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/40 rounded-md heatmap-cell"></div>
+<div class="text-xs text-slate-400 flex items-center pr-2">Bash</div>
+<div class="h-10 bg-primary/10 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/30 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/10 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/20 rounded-md heatmap-cell"></div>
+<div class="text-xs text-slate-400 flex items-center pr-2">Search</div>
+<div class="h-10 bg-primary/60 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/90 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/50 rounded-md heatmap-cell"></div>
+<div class="h-10 bg-primary/70 rounded-md heatmap-cell"></div>
+</div>
+<div class="mt-6 flex items-center gap-2 text-[10px] text-slate-500">
+<span>Low Usage</span>
+<div class="flex-1 h-2 rounded-full bg-gradient-to-r from-primary/10 to-primary"></div>
+<span>High Usage</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+<!-- 4. Token Burn Rate Line Chart -->
+<div class="bg-surface-dark p-6 rounded-xl border border-border-dark">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold text-slate-100">Token Consumption</h3>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-1.5">
+<div class="size-2 rounded-full bg-primary"></div>
+<span class="text-xs text-slate-400">Prompt</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="size-2 rounded-full bg-slate-400"></div>
+<span class="text-xs text-slate-400">Completion</span>
+</div>
+</div>
+</div>
+<div class="h-48 w-full relative">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 400 100">
+<!-- Prompt Path -->
+<path d="M0,80 Q50,70 100,85 T200,60 T300,75 T400,40" fill="none" stroke="#4c5ce6" stroke-width="2"></path>
+<!-- Completion Path -->
+<path d="M0,90 Q50,85 100,92 T200,80 T300,88 T400,70" fill="none" stroke="#94a3b8" stroke-width="2"></path>
+</svg>
+<div class="flex justify-between mt-4 text-[10px] text-slate-500 font-medium">
+<span>08:00</span>
+<span>10:00</span>
+<span>12:00</span>
+<span>14:00</span>
+<span>16:00</span>
+<span>18:00</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-6">
+<div class="bg-background-dark p-3 rounded-lg border border-border-dark">
+<p class="text-[10px] text-slate-500 uppercase tracking-wide">Daily Prompt Tokens</p>
+<p class="text-xl font-bold text-slate-100">1.2M</p>
+</div>
+<div class="bg-background-dark p-3 rounded-lg border border-border-dark">
+<p class="text-[10px] text-slate-500 uppercase tracking-wide">Daily Completion Tokens</p>
+<p class="text-xl font-bold text-slate-100">450k</p>
+</div>
+</div>
+</div>
+<!-- 5. Cost Breakdown Table -->
+<div class="bg-surface-dark p-6 rounded-xl border border-border-dark">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold text-slate-100">Cost per Agent</h3>
+<button class="text-xs text-primary font-bold hover:underline">View All</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-border-dark">
+<th class="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Agent Name</th>
+<th class="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sessions</th>
+<th class="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Avg. Latency</th>
+<th class="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right">Cost (USD)</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-dark">
+<tr>
+<td class="py-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-sm">terminal</span>
+</div>
+<span class="text-sm font-medium text-slate-200">DevOps-Bot</span>
+</div>
+</td>
+<td class="py-4 text-sm text-slate-400">142</td>
+<td class="py-4 text-sm text-slate-400">1.2s</td>
+<td class="py-4 text-sm font-bold text-slate-100 text-right">$42.80</td>
+</tr>
+<tr>
+<td class="py-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+<span class="material-symbols-outlined text-sm">edit_note</span>
+</div>
+<span class="text-sm font-medium text-slate-200">Content-Gen-X</span>
+</div>
+</td>
+<td class="py-4 text-sm text-slate-400">385</td>
+<td class="py-4 text-sm text-slate-400">2.4s</td>
+<td class="py-4 text-sm font-bold text-slate-100 text-right">$115.24</td>
+</tr>
+<tr>
+<td class="py-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+<span class="material-symbols-outlined text-sm">psychology</span>
+</div>
+<span class="text-sm font-medium text-slate-200">Strategic-Lead</span>
+</div>
+</td>
+<td class="py-4 text-sm text-slate-400">24</td>
+<td class="py-4 text-sm text-slate-400">5.8s</td>
+<td class="py-4 text-sm font-bold text-slate-100 text-right">$89.15</td>
+</tr>
+<tr>
+<td class="py-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-slate-500/20 flex items-center justify-center text-slate-400">
+<span class="material-symbols-outlined text-sm">search</span>
+</div>
+<span class="text-sm font-medium text-slate-200">Researcher-01</span>
+</div>
+</td>
+<td class="py-4 text-sm text-slate-400">1,102</td>
+<td class="py-4 text-sm text-slate-400">0.8s</td>
+<td class="py-4 text-sm font-bold text-slate-100 text-right">$12.40</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { usePreparedAssetSrc } from "../world/preparedAsset";
 
 interface IconTokenProps {
   src?: string;
@@ -8,6 +9,7 @@ interface IconTokenProps {
   autoTrim?: boolean;
   maxAutoScale?: number;
   minAutoScale?: number;
+  backgroundFloodTrim?: boolean;
 }
 
 const trimScaleCache = new Map<string, number>();
@@ -98,25 +100,28 @@ export default function IconToken({
   className,
   autoTrim = false,
   maxAutoScale = 8,
-  minAutoScale = 1
+  minAutoScale = 1,
+  backgroundFloodTrim = false
 }: IconTokenProps): JSX.Element {
   const [errored, setErrored] = useState(false);
   const [trimScale, setTrimScale] = useState(1);
+  const preparedSrc = usePreparedAssetSrc(src, { backgroundFloodTrim });
+  const displaySrc = preparedSrc ?? src;
 
   useEffect(() => {
     setErrored(false);
-  }, [src]);
+  }, [displaySrc]);
 
   useEffect(() => {
     let disposed = false;
-    if (!src || !autoTrim || errored) {
+    if (!displaySrc || !autoTrim || errored) {
       setTrimScale(1);
       return () => {
         disposed = true;
       };
     }
 
-    resolveTrimScale(src, maxAutoScale)
+    resolveTrimScale(displaySrc, maxAutoScale)
       .then((scale) => {
         if (!disposed) {
           setTrimScale(scale);
@@ -131,15 +136,15 @@ export default function IconToken({
     return () => {
       disposed = true;
     };
-  }, [src, autoTrim, maxAutoScale, errored]);
+  }, [displaySrc, autoTrim, maxAutoScale, errored]);
 
-  if (src && !errored) {
+  if (displaySrc && !errored) {
     const appliedScale = autoTrim ? Math.max(trimScale, minAutoScale) : trimScale;
     return (
       <span className={`icon-token icon-image ${className ?? ""}`.trim()} title={title}>
         <img
           className="icon-token-image"
-          src={src}
+          src={displaySrc}
           alt=""
           loading="lazy"
           style={appliedScale > 1 ? { transform: `scale(${appliedScale})`, transformOrigin: "center" } : undefined}

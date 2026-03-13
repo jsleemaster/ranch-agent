@@ -94,11 +94,12 @@ class SituationRoomViewProvider implements vscode.WebviewViewProvider, vscode.Di
     this.paths = resolveProjectPaths(context);
 
     this.teamResolver = new TeamResolver(this.paths.teamConfigPath);
-    this.store = new SnapshotStore({
-      teamResolver: this.teamResolver
-    });
     this.agentMdResolver = new AgentMdResolver(this.paths.workspaceRoot);
     this.skillMdResolver = new SkillMdResolver(this.paths.workspaceRoot);
+    this.store = new SnapshotStore({
+      teamResolver: this.teamResolver,
+      getAgentMdCatalog: () => this.agentMdResolver.getCatalog()
+    });
     const initialUnmappedSkillLoggerConfig = this.readUnmappedSkillLoggerConfig();
     this.unmappedSkillLogger = new UnmappedSkillLogger(this.output, initialUnmappedSkillLoggerConfig);
     this.logUnmappedSkillLoggerConfig(initialUnmappedSkillLoggerConfig);
