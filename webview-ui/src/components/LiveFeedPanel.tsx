@@ -1,142 +1,126 @@
 import React from "react";
 
-import type { WebviewAssetCatalog } from "@shared/assets";
 import type { FeedEvent } from "@shared/domain";
-import {
-  gateEmoji,
-  gateIconKey,
-  growthEmoji,
-  iconUrl,
-  skillEmoji,
-  skillIconKey,
-  zoneEmoji,
-  zoneIconKey,
-  zoneLabel
-} from "../world/iconKeys";
-import IconToken from "./IconToken";
+import { workspaceHookGateLabel, workspaceInitials, workspaceSkillLabel } from "../world/workspaceStages";
 
 interface LiveFeedPanelProps {
   events: FeedEvent[];
-  assets: WebviewAssetCatalog;
   variant?: "panel" | "overlay";
 }
 
-function formatTime(ts: number): string {
-  const date = new Date(ts);
-  return date.toLocaleTimeString();
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const minutes = Math.max(0, Math.round(diff / 60000));
+  if (minutes < 1) {
+    return "방금";
+  }
+  if (minutes < 60) {
+    return `${minutes}분 전`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return `${hours}시간 전`;
 }
 
-function shortAgentId(agentId: string): string {
-  const normalized = agentId.trim();
-  if (normalized.length <= 12) {
-    return normalized;
+function describeEvent(event: FeedEvent): string {
+  if (event.kind === "session_rollover") {
+    return event.text?.trim() || "이전 작업이 이어서 다시 시작되었습니다.";
   }
-  const dash = normalized.indexOf("-");
-  if (dash > 0) {
-    return normalized.slice(0, Math.min(10, dash));
+  if (event.text && event.text.trim().length > 0) {
+    return event.text.replace(/\s+/g, " ").trim();
   }
-  return normalized.slice(0, 10);
+  if (event.hookGate === "failed") {
+    return "작업 중 다시 확인해야 할 문제가 생겼습니다.";
+  }
+  if (event.hookGate === "blocked") {
+    return "다음 진행 전에 확인이 필요합니다.";
+  }
+  if (event.skill) {
+    return `${workspaceSkillLabel(event.skill)} 작업을 진행하고 있습니다.`;
+  }
+  return "작업 상태가 새로 기록되었습니다.";
 }
 
-function gateCode(value: FeedEvent["hookGate"]): string {
-  switch (value) {
-    case "open":
-      return "O";
-    case "blocked":
-      return "B";
-    case "failed":
-      return "F";
-    case "closed":
-      return "C";
-    default:
-      return "-";
+function looksLikeCodeNoise(text: string): boolean {
+  if (text.length < 120) {
+    return false;
   }
+  return /(?:import\s|export\s|=>|const\s|let\s|var\s|function\s|class\s|return\s|[{}`;$]|Number\(|\[\w)/.test(text);
 }
 
-function skillCode(value: FeedEvent["skill"]): string {
-  if (!value) {
-    return "-";
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) {
+    return text;
   }
-  return value.slice(0, 1).toUpperCase();
+  return `${text.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
 }
 
-function compactDetail(value: string | undefined): string {
-  if (!value) {
-    return "";
+function panelSummary(event: FeedEvent): string {
+  const detailed = describeEvent(event);
+  if (looksLikeCodeNoise(detailed)) {
+    if (event.hookGate === "failed") {
+      return "작업 중 다시 확인해야 할 문제가 생겼습니다.";
+    }
+    if (event.hookGate === "blocked") {
+      return "다음 진행 전에 확인이 필요합니다.";
+    }
+    if (event.skill) {
+      return `${workspaceSkillLabel(event.skill)} 작업 내용이 갱신되었습니다.`;
+    }
+    return "작업 내용이 갱신되었습니다.";
   }
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= 26) {
-    return normalized;
-  }
-  return `${normalized.slice(0, 25)}...`;
+  return truncateText(detailed, 140);
 }
 
-export default function LiveFeedPanel({
-  events,
-  assets,
-  variant = "panel"
-}: LiveFeedPanelProps): JSX.Element {
-  const ordered = [...events].reverse();
-  const containerClass = variant === "overlay" ? "live-feed live-feed-overlay" : "panel-body live-feed";
+function accentClass(event: FeedEvent): string {
+  if (event.kind === "session_rollover") {
+    return "timeline-system";
+  }
+  if (event.hookGate === "failed") {
+    return "timeline-alert";
+  }
+  if (event.hookGate === "blocked") {
+    return "timeline-warning";
+  }
+  if (event.hookGate === "open") {
+    return "timeline-success";
+  }
+  return "timeline-neutral";
+}
+
+export default function LiveFeedPanel({ events, variant = "panel" }: LiveFeedPanelProps): JSX.Element {
+  const ordered = [...events].sort((a, b) => b.ts - a.ts);
 
   return (
-    <div className={containerClass}>
-      {ordered.map((event) => {
-        const skillIcon = iconUrl(assets, skillIconKey(event.skill));
-        const gateIcon = iconUrl(assets, gateIconKey(event.hookGate));
-        const zoneIcon = iconUrl(assets, zoneIconKey(event.zoneId));
-        const code = `${skillCode(event.skill)}${gateCode(event.hookGate)}`;
-        const detail = compactDetail(event.text);
-        const stage = event.growthStage ?? "seed";
-
-        const tooltip = [
-          `time: ${new Date(event.ts).toISOString()}`,
-          `agent: ${event.agentId}`,
-          `branch: ${event.branchName ?? "unknown"}`,
-          `main-risk: ${event.mainBranchRisk ? "yes" : "no"}`,
-          `agent-md: ${event.invokedAgentMdId ?? "none"}`,
-          `skill: ${event.skill ?? "none"}`,
-          `gate: ${event.hookGate ?? "none"}`,
-          `zone: ${zoneLabel(event.zoneId)}`,
-          `growth: ${stage}`,
-          event.text ? `detail: ${event.text}` : ""
-        ]
-          .filter(Boolean)
-          .join("\n");
-
-        return (
-          <div
-            key={event.id}
-            className="feed-row"
-            title={tooltip}
-          >
-            <span className="feed-time">{formatTime(event.ts)}</span>
-            <span className="feed-agent">{shortAgentId(event.agentId)}</span>
-            <span className="feed-code">{code}</span>
-            <IconToken 
-              src={skillIcon} 
-              fallback={skillEmoji(event.skill)} 
-              title={`skill: ${event.skill ?? "none"}`} 
-              className="mini-icon" 
-            />
-            <IconToken 
-              src={gateIcon} 
-              fallback={gateEmoji(event.hookGate)} 
-              title={`gate: ${event.hookGate ?? "none"}`} 
-              className="mini-icon" 
-            />
-            <IconToken 
-              src={zoneIcon} 
-              fallback={zoneEmoji(event.zoneId)} 
-              title={`zone: ${zoneLabel(event.zoneId)}`} 
-              className="mini-icon" 
-            />
-            <span className={`feed-growth growth-${stage}`}>{growthEmoji(stage)}</span>
-            <span className="feed-detail">{detail || "기록 없음"}</span>
+    <div className={variant === "overlay" ? "activity-feed activity-feed-overlay" : "activity-feed activity-feed-panel"}>
+      {ordered.length === 0 ? (
+        <div className="workspace-empty-state compact">
+          <div className="workspace-empty-title">아직 최근 활동이 없습니다</div>
+          <div className="workspace-empty-copy">새 작업이 들어오면 최근 활동이 시간순으로 보입니다.</div>
+        </div>
+      ) : (
+        ordered.map((event, index) => (
+          <div key={event.id} className={`timeline-item ${accentClass(event)}`}>
+            <div className="timeline-rail" aria-hidden={true}>
+              <div className="timeline-node">{workspaceInitials(event.displayShortName || event.displayName)}</div>
+              {index < ordered.length - 1 ? <div className="timeline-line" /> : null}
+            </div>
+            <div className="timeline-content">
+              <div className="timeline-head">
+                <span className="timeline-name">{event.displayShortName}</span>
+                <span className="timeline-time">{relativeTime(event.ts)}</span>
+              </div>
+              <p className="timeline-copy">{variant === "overlay" ? describeEvent(event) : panelSummary(event)}</p>
+              <div className="timeline-meta">
+                {event.kind === "session_rollover" ? <span className="workspace-chip tone-info">작업 이어짐</span> : null}
+                {event.skill ? <span className="workspace-chip tone-primary">{workspaceSkillLabel(event.skill)}</span> : null}
+                {workspaceHookGateLabel(event.hookGate) ? (
+                  <span className="workspace-chip tone-muted">{workspaceHookGateLabel(event.hookGate)}</span>
+                ) : null}
+              </div>
+            </div>
           </div>
-        );
-      })}
-      {ordered.length === 0 ? <div className="empty-hint" title="작업 일지는 첫 이벤트가 오면 채워집니다">작업 일지 대기 중</div> : null}
+        ))
+      )}
     </div>
   );
 }

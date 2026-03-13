@@ -7,11 +7,13 @@ import { describe, expect, it } from "vitest";
 import type { RawRuntimeEvent } from "../../../shared/runtime";
 import { SnapshotStore } from "../domain/snapshotStore";
 import { TeamResolver } from "../domain/teamResolver";
+import { stableAgentRuntimeIdForSource } from "../runtimeHub";
 
 function makeEvent(type: RawRuntimeEvent["type"], patch: Partial<RawRuntimeEvent> = {}): RawRuntimeEvent {
   return {
     runtime: "claude-jsonl",
     agentRuntimeId: "agent-1",
+    sessionRuntimeId: "session-1",
     ts: Date.now(),
     type,
     toolName: "Bash",
@@ -102,7 +104,7 @@ describe("SnapshotStore", () => {
     expect(agentIds).not.toContain("old-agent");
   });
 
-  it("marks idle waiting agents as completed and resumes on next event", () => {
+  it("archives idle waiting sessions and removes them from the live world", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-completed-"));
     const configPath = path.join(tempDir, ".agent-teams.json");
     fs.writeFileSync(
@@ -122,10 +124,13 @@ describe("SnapshotStore", () => {
     expect(update.agent.state).toBe("waiting");
 
     store.applyRawEvent(makeEvent("assistant_text", { ts: 32_000, agentRuntimeId: "worker-b" }));
-    const afterIdle = store.getWorldInit().agents.find((agent) => agent.agentId === "worker-a");
-    expect(afterIdle?.state).toBe("completed");
+    const world = store.getWorldInit();
+    expect(world.agents.find((agent) => agent.agentId === "worker-a")).toBeUndefined();
+    expect(world.sessions.find((session) => session.lineageId === "worker-a")?.closeReason).toBe("work_finished");
 
-    update = store.applyRawEvent(makeEvent("tool_start", { ts: 33_000, agentRuntimeId: "worker-a" }));
+    update = store.applyRawEvent(
+      makeEvent("tool_start", { ts: 33_000, agentRuntimeId: "worker-a", sessionRuntimeId: "session-2" })
+    );
     expect(update.agent.state).toBe("active");
   });
 
@@ -150,6 +155,116 @@ describe("SnapshotStore", () => {
 
     const workerA = store.getWorldInit().agents.find((agent) => agent.agentId === "worker-a");
     expect(workerA?.state).toBe("waiting");
+  });
+
+  it("clears stale pending wait and archives the session after timeout", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-stale-wait-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(makeEvent("permission_wait", { ts: 1_000, agentRuntimeId: "worker-a" }));
+    store.applyRawEvent(makeEvent("assistant_text", { ts: 50_000, agentRuntimeId: "worker-b" }));
+
+    const world = store.getWorldInit();
+    expect(world.agents.find((agent) => agent.agentId === "worker-a")).toBeUndefined();
+    const archived = world.sessions.find((session) => session.lineageId === "worker-a");
+    expect(archived?.closeReason).toBe("work_finished");
+    expect(archived?.waitTotalMs).toBe(49_000);
+  });
+
+  it("prunes stale subagents faster than main agents", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-subagent-prune-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(
+      makeEvent("tool_start", {
+        ts: 1_000,
+        agentRuntimeId: "sub-worker",
+        sourcePath: "/Users/me/.claude/projects/repo/subagents/agent-1.jsonl"
+      })
+    );
+    store.applyRawEvent(makeEvent("tool_start", { ts: 1_000, agentRuntimeId: "main-worker" }));
+
+    // Advance time with another agent event.
+    store.applyRawEvent(makeEvent("assistant_text", { ts: 23_000, agentRuntimeId: "ticker" }));
+    const world = store.getWorldInit();
+    const agentIds = world.agents.map((agent) => agent.agentId);
+    expect(agentIds).toContain("main-worker");
+    expect(agentIds).not.toContain("sub-worker");
+  });
+
+  it("archives prior session on same lineage when sessionRuntimeId rolls over", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-rollover-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(makeEvent("tool_start", { ts: 1_000, agentRuntimeId: "worker-a", sessionRuntimeId: "sess-1" }));
+    const update = store.applyRawEvent(
+      makeEvent("assistant_text", { ts: 2_000, agentRuntimeId: "worker-a", sessionRuntimeId: "sess-2" })
+    );
+
+    expect(update.sessionArchives).toHaveLength(1);
+    expect(update.sessionArchives[0]?.closeReason).toBe("conversation_rollover");
+    expect(update.sessionArchives[0]?.sessionId).toBe("sess-1");
+    expect(update.agent.agentId).toBe("worker-a");
+  });
+
+  it("archives stuck sessions as stale cleanup when pending tool blocks normal completion", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-stale-cleanup-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    store.applyRawEvent(makeEvent("tool_start", { ts: 1_000, agentRuntimeId: "worker-a", sessionRuntimeId: "sess-1" }));
+    store.applyRawEvent(makeEvent("assistant_text", { ts: 182_000, agentRuntimeId: "ticker", sessionRuntimeId: "tick-1" }));
+
+    const archived = store.getWorldInit().sessions.find((session) => session.lineageId === "worker-a");
+    expect(archived?.closeReason).toBe("stale_cleanup");
+    expect(archived?.toolRunCount).toBe(0);
   });
 
   it("measures wait durations for permission and turn waits", () => {
@@ -288,6 +403,47 @@ describe("SnapshotStore", () => {
     expect(bashMetric).toEqual({ skill: "bash", usageCount: 5, growthStage: "sprout" });
   });
 
+  it("separates runtime signal metrics from skill metrics", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-signals-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    const orchestrationUpdate = store.applyRawEvent(makeEvent("tool_start", { ts: 1, toolName: "Agent" }));
+    expect(orchestrationUpdate.signalMetrics).toEqual([{ signal: "orchestration_signal", usageCount: 1 }]);
+    expect(orchestrationUpdate.skillMetrics).toEqual([{ skill: "other", usageCount: 1, growthStage: "seed" }]);
+
+    const missingToolUpdate = store.applyRawEvent(makeEvent("tool_done", { ts: 2, toolName: undefined }));
+    expect(missingToolUpdate.signalMetrics).toEqual([{ signal: "tool_name_missing_signal", usageCount: 1 }]);
+
+    const assistantUpdate = store.applyRawEvent(makeEvent("assistant_text", { ts: 3, toolName: undefined }));
+    expect(assistantUpdate.signalMetrics).toEqual([{ signal: "assistant_reply_signal", usageCount: 1 }]);
+
+    const unknownToolUpdate = store.applyRawEvent(makeEvent("tool_start", { ts: 4, toolName: "MagicTool" }));
+    expect(unknownToolUpdate.signalMetrics).toEqual([{ signal: "unknown_tool_signal", usageCount: 1 }]);
+
+    // Known mapped skill should not increment runtime signal metrics.
+    const mappedSkillUpdate = store.applyRawEvent(makeEvent("tool_start", { ts: 5, toolName: "Read" }));
+    expect(mappedSkillUpdate.signalMetrics).toEqual([]);
+
+    const world = store.getWorldInit();
+    const signalByKind = new Map(world.signals.map((metric) => [metric.signal, metric.usageCount]));
+    expect(signalByKind.get("orchestration_signal")).toBe(1);
+    expect(signalByKind.get("tool_name_missing_signal")).toBe(1);
+    expect(signalByKind.get("assistant_reply_signal")).toBe(1);
+    expect(signalByKind.get("unknown_tool_signal")).toBe(1);
+  });
+
   it("measures tool run duration from start to done", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-tool-run-ms-"));
     const configPath = path.join(tempDir, ".agent-teams.json");
@@ -420,5 +576,124 @@ describe("SnapshotStore", () => {
     expect(update.agent.completionTokensTotal).toBe(30);
     expect(update.agent.totalTokensTotal).toBe(180);
     expect(update.agent.lastTotalTokens).toBe(60);
+  });
+
+  it("stores statusline budgets on transcript-derived lineage ids", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-statusline-budget-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    const transcriptPath = path.join(tempDir, "runtime-a.jsonl");
+    const lineageId = stableAgentRuntimeIdForSource(transcriptPath);
+    store.applyRawEvent(
+      makeEvent("assistant_text", { ts: 1_000, agentRuntimeId: lineageId, sessionRuntimeId: "sess-1" })
+    );
+
+    const update = store.applyStatuslineSnapshot({
+      ts: 1_500,
+      transcriptPath,
+      sessionRuntimeId: "sess-1",
+      contextPercent: 42,
+      sessionTokensTotal: 1300,
+      totalCostUsd: 1.23
+    });
+
+    expect(update.budget?.lineageId).toBe(lineageId);
+    expect(store.getWorldInit().budgets[0]).toMatchObject({
+      lineageId,
+      sessionTokensTotal: 1300,
+      contextPercent: 42
+    });
+  });
+
+  it("archives prior session and emits session rollover feed when statusline session id changes", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-statusline-rollover-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    const transcriptPath = path.join(tempDir, "runtime-b.jsonl");
+    const lineageId = stableAgentRuntimeIdForSource(transcriptPath);
+    store.applyRawEvent(makeEvent("tool_start", { ts: 1_000, agentRuntimeId: lineageId, sessionRuntimeId: "sess-1" }));
+    store.applyStatuslineSnapshot({
+      ts: 1_500,
+      transcriptPath,
+      sessionRuntimeId: "sess-1",
+      sessionTokensTotal: 100
+    });
+
+    const update = store.applyStatuslineSnapshot({
+      ts: 2_000,
+      transcriptPath,
+      sessionRuntimeId: "sess-2",
+      sessionTokensTotal: 12
+    });
+
+    expect(update.sessionArchives).toHaveLength(1);
+    expect(update.sessionArchives[0]?.closeReason).toBe("conversation_rollover");
+    expect(update.feed.map((event) => event.kind)).toContain("session_rollover");
+    expect(store.getWorldInit().budgets[0]?.sessionRuntimeId).toBe("sess-2");
+  });
+
+  it("copies statusline metrics into archived sessions", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-store-statusline-archive-"));
+    const configPath = path.join(tempDir, ".agent-teams.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        defaultTeamId: "solo",
+        teams: [{ id: "solo", icon: "team_default", color: "#000", members: [] }]
+      })
+    );
+
+    const store = new SnapshotStore({
+      teamResolver: new TeamResolver(configPath)
+    });
+
+    const transcriptPath = path.join(tempDir, "runtime-d.jsonl");
+    const lineageId = stableAgentRuntimeIdForSource(transcriptPath);
+    store.applyRawEvent(makeEvent("tool_start", { ts: 1_000, agentRuntimeId: lineageId, sessionRuntimeId: "sess-1" }));
+    store.applyStatuslineSnapshot({
+      ts: 1_100,
+      transcriptPath,
+      sessionRuntimeId: "sess-1",
+      contextPercent: 61,
+      sessionTokensTotal: 2300,
+      totalCostUsd: 0.42
+    });
+
+    const rolloverUpdate = store.applyStatuslineSnapshot({
+      ts: 1_200,
+      transcriptPath,
+      sessionRuntimeId: "sess-2",
+      sessionTokensTotal: 12
+    });
+
+    const archived = rolloverUpdate.sessionArchives.find((session) => session.lineageId === lineageId);
+    expect(archived?.statuslineSessionTokensTotal).toBe(2300);
+    expect(archived?.statuslineContextPeakPercent).toBe(61);
+    expect(archived?.statuslineCostUsd).toBe(0.42);
   });
 });

@@ -5,3 +5,6 @@ build
 *.log
 .DS_Store
 .local-debug/
+.venv-ohmy/
+.tmp-home/
+.omc/

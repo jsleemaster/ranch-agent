@@ -1,7 +1,7 @@
 {
   "name": "ranch-agent-extension",
   "displayName": "Ranch-Agent",
-  "description": "Emoji-first multi-agent ranch visualization for Claude JSONL",
+  "description": "Premium rail control room visualization for Claude multi-agent runtime",
   "private": true,
   "version": "0.1.0",
   "publisher": "local",
@@ -12,20 +12,25 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onView:expeditionSituationRoom.view",
-    "onCommand:expeditionSituationRoom.focus"
+    "onCommand:expeditionSituationRoom.focus",
+    "onCommand:expeditionSituationRoom.copyStatuslineSetup"
   ],
   "contributes": {
     "commands": [
       {
         "command": "expeditionSituationRoom.focus",
-        "title": "Ranch-Agent: Focus Ranch"
+        "title": "Ranch-Agent: Focus Control Room"
+      },
+      {
+        "command": "expeditionSituationRoom.copyStatuslineSetup",
+        "title": "Ranch-Agent: Copy Claude StatusLine Setup"
       }
     ],
     "viewsContainers": {
       "panel": [
         {
           "id": "expeditionSituationRoom",
-          "title": "Ranch-Agent",
+          "title": "Rail Control",
           "icon": "media/icon.png"
         }
       ]
@@ -34,7 +39,7 @@
       "expeditionSituationRoom": [
         {
           "id": "expeditionSituationRoom.view",
-          "name": "Ranch-Agent",
+          "name": "Rail Control Room",
           "type": "webview"
         }
       ]
@@ -87,6 +92,125 @@
           ],
           "default": "global",
           "description": "Base directory for relative debug.unmappedSkillLog.filePath. 'global' stores logs in extension global storage; 'workspace' stores logs in the opened project."
+        },
+        "expeditionSituationRoom.debug.unmappedSkillLog.maxDetailChars": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1200,
+          "description": "Maximum number of detail characters written per unmapped-skill record. Set 0 to omit detail text."
+        },
+        "expeditionSituationRoom.debug.unmappedSkillLog.captureReasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "unknown_tool_name",
+              "missing_tool_name",
+              "assistant_without_tool_name"
+            ]
+          },
+          "default": [
+            "unknown_tool_name",
+            "missing_tool_name",
+            "assistant_without_tool_name"
+          ],
+          "description": "Which unmapped-skill reasons to capture in debug log records."
+        },
+        "expeditionSituationRoom.httpHook.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable local HTTP hook receiver for Claude hooks."
+        },
+        "expeditionSituationRoom.httpHook.bind": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Bind address for the local HTTP hook receiver."
+        },
+        "expeditionSituationRoom.httpHook.port": {
+          "type": "number",
+          "default": 48216,
+          "description": "TCP port for the local HTTP hook receiver."
+        },
+        "expeditionSituationRoom.httpHook.path": {
+          "type": "string",
+          "default": "/ranch-hook",
+          "description": "HTTP path for receiving Claude hook POST requests."
+        },
+        "expeditionSituationRoom.httpHook.authToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Bearer token required by the HTTP hook receiver."
+        },
+        "expeditionSituationRoom.httpHook.rawLog.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable raw HTTP hook payload NDJSON logging."
+        },
+        "expeditionSituationRoom.httpHook.rawLog.filePath": {
+          "type": "string",
+          "default": ".local-debug/http-hook-events.ndjson",
+          "description": "Where to write raw HTTP hook payload logs. Relative paths resolve from httpHook.rawLog.relativeBase."
+        },
+        "expeditionSituationRoom.httpHook.rawLog.relativeBase": {
+          "type": "string",
+          "enum": [
+            "global",
+            "workspace"
+          ],
+          "default": "global",
+          "description": "Base directory for relative httpHook.rawLog.filePath."
+        },
+        "expeditionSituationRoom.httpHook.mergeMode": {
+          "type": "string",
+          "enum": [
+            "jsonl_primary"
+          ],
+          "default": "jsonl_primary",
+          "description": "Merge strategy when JSONL and HTTP hook events overlap."
+        },
+        "expeditionSituationRoom.statusline.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the local Claude statusLine bridge receiver."
+        },
+        "expeditionSituationRoom.statusline.bind": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Bind address for the local statusLine bridge receiver."
+        },
+        "expeditionSituationRoom.statusline.port": {
+          "type": "number",
+          "default": 48217,
+          "description": "TCP port for the local statusLine bridge receiver."
+        },
+        "expeditionSituationRoom.statusline.path": {
+          "type": "string",
+          "default": "/ranch-statusline",
+          "description": "HTTP path for receiving Claude statusLine snapshots."
+        },
+        "expeditionSituationRoom.statusline.authToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Bearer token required by the statusLine bridge receiver."
+        },
+        "expeditionSituationRoom.statusline.rawLog.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable raw Claude statusLine payload NDJSON logging."
+        },
+        "expeditionSituationRoom.statusline.rawLog.filePath": {
+          "type": "string",
+          "default": ".local-debug/statusline-events.ndjson",
+          "description": "Where to write raw statusLine payload logs. Relative paths resolve from statusline.rawLog.relativeBase."
+        },
+        "expeditionSituationRoom.statusline.rawLog.relativeBase": {
+          "type": "string",
+          "enum": [
+            "global",
+            "workspace"
+          ],
+          "default": "global",
+          "description": "Base directory for relative statusline.rawLog.filePath."
         }
       }
     }

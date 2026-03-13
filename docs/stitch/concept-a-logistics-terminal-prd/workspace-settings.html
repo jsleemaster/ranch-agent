@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Workspace AI Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4c5ce6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111321",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #363a63;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<!-- Top Navigation -->
+<div class="px-4 lg:px-40 flex flex-1 justify-center py-5">
+<div class="layout-content-container flex flex-col max-w-[960px] flex-1">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 px-4 py-3">
+<div class="flex items-center gap-4 text-slate-900 dark:text-white">
+<div class="size-6 text-primary">
+<span class="material-symbols-outlined text-3xl">hub</span>
+</div>
+<h2 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-tight">Workspace AI Dashboard</h2>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center justify-center rounded-lg h-10 w-10 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="flex items-center justify-center rounded-lg h-10 w-10 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Tabs -->
+<div class="pb-3 overflow-x-auto">
+<div class="flex border-b border-slate-200 dark:border-slate-800 px-4 gap-8 min-w-max">
+<a class="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-slate-500 dark:text-slate-400 pb-[13px] pt-4 hover:text-primary" href="#">
+<p class="text-sm font-bold leading-normal">Dashboard</p>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-b-primary text-slate-900 dark:text-white pb-[13px] pt-4" href="#">
+<p class="text-sm font-bold leading-normal">Settings</p>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-slate-500 dark:text-slate-400 pb-[13px] pt-4 hover:text-primary" href="#">
+<p class="text-sm font-bold leading-normal">Analytics</p>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-slate-500 dark:text-slate-400 pb-[13px] pt-4 hover:text-primary" href="#">
+<p class="text-sm font-bold leading-normal">Logs</p>
+</a>
+</div>
+</div>
+<div class="flex flex-col gap-8 px-4 py-6">
+<!-- Display Preferences -->
+<section>
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight pb-4">Display Preferences</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<label class="flex items-start gap-4 rounded-lg border border-solid border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900/50 cursor-pointer hover:border-primary/50 transition-colors">
+<input checked="" class="mt-1 h-5 w-5 border-2 border-slate-300 dark:border-slate-700 bg-transparent text-primary focus:ring-primary focus:ring-offset-0" name="mode" type="radio"/>
+<div class="flex grow flex-col">
+<p class="text-slate-900 dark:text-white text-sm font-bold">Simple Mode</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs mt-1">User-friendly terminology for general workspace collaboration.</p>
+</div>
+</label>
+<label class="flex items-start gap-4 rounded-lg border border-solid border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900/50 cursor-pointer hover:border-primary/50 transition-colors">
+<input class="mt-1 h-5 w-5 border-2 border-slate-300 dark:border-slate-700 bg-transparent text-primary focus:ring-primary focus:ring-offset-0" name="mode" type="radio"/>
+<div class="flex grow flex-col">
+<p class="text-slate-900 dark:text-white text-sm font-bold">Advanced Mode</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Developer-level controls, technical metadata, and debug logs.</p>
+</div>
+</label>
+</div>
+</section>
+<!-- Model Selection -->
+<section>
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight pb-4">Default LLM Model</h2>
+<div class="relative max-w-md">
+<select class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary appearance-none">
+<option>GPT-4o (Default)</option>
+<option>Claude 3.5 Sonnet</option>
+<option>Llama 3 70B</option>
+<option>Gemini 1.5 Pro</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-3 pointer-events-none text-slate-400">expand_more</span>
+</div>
+</section>
+<!-- Agent MD & Skill Catalog -->
+<section>
+<div class="flex items-center justify-between pb-4">
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Agent &amp; Skill Catalog</h2>
+<button class="text-primary text-sm font-bold hover:underline">View All</button>
+</div>
+<div class="relative mb-4">
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-xl">search</span>
+<input class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary" placeholder="Search markdown descriptions..." type="text"/>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+<div class="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">smart_toy</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-bold">Architect_MD</p>
+<p class="text-xs text-slate-500">System architecture agent description</p>
+</div>
+<span class="material-symbols-outlined text-slate-400 cursor-pointer hover:text-primary">description</span>
+</div>
+<div class="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-green-500/10 flex items-center justify-center text-green-500">
+<span class="material-symbols-outlined">bolt</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-bold">CodeReviewer_Skill</p>
+<p class="text-xs text-slate-500">Python &amp; TS skill definition</p>
+</div>
+<span class="material-symbols-outlined text-slate-400 cursor-pointer hover:text-primary">description</span>
+</div>
+</div>
+</section>
+<!-- Budget Controls -->
+<section>
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight pb-4">Budget &amp; Resource Limits</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+<div>
+<label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Cost Alert Limit (USD)</label>
+<div class="flex items-center gap-2">
+<span class="text-slate-400 font-bold">$</span>
+<input class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-primary" type="number" value="150"/>
+</div>
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Context Usage Alert (%)</label>
+<div class="flex items-center gap-2">
+<input class="w-full accent-primary" max="100" min="0" type="range" value="85"/>
+<span class="text-sm font-bold min-w-[3rem] text-right">85%</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Team Configuration -->
+<section class="pb-10">
+<div class="flex items-center justify-between pb-4">
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight tracking-tight">Team Configuration</h2>
+<button class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+                                Add Agent
+                            </button>
+</div>
+<div class="overflow-hidden border border-slate-200 dark:border-slate-800 rounded-xl">
+<table class="w-full text-left border-collapse">
+<thead class="bg-slate-50 dark:bg-slate-900/80">
+<tr>
+<th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Agent ID</th>
+<th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Role</th>
+<th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+<th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-4 text-sm font-medium">agent-7721-delta</td>
+<td class="px-4 py-4">
+<span class="px-2 py-1 bg-primary/20 text-primary text-[10px] font-bold rounded uppercase">Main</span>
+</td>
+<td class="px-4 py-4">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+<span class="text-xs text-slate-400">Active</span>
+</div>
+</td>
+<td class="px-4 py-4 text-right">
+<button class="text-slate-400 hover:text-red-500 transition-colors">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-4 text-sm font-medium">agent-4412-sigma</td>
+<td class="px-4 py-4">
+<span class="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded uppercase">Sub</span>
+</td>
+<td class="px-4 py-4">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+<span class="text-xs text-slate-400">Active</span>
+</div>
+</td>
+<td class="px-4 py-4 text-right">
+<button class="text-slate-400 hover:text-red-500 transition-colors">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+<td class="px-4 py-4 text-sm font-medium">agent-9003-beta</td>
+<td class="px-4 py-4">
+<span class="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded uppercase">Sub</span>
+</td>
+<td class="px-4 py-4">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-slate-600"></div>
+<span class="text-xs text-slate-400">Idle</span>
+</div>
+</td>
+<td class="px-4 py-4 text-right">
+<button class="text-slate-400 hover:text-red-500 transition-colors">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<div class="flex justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-800">
+<button class="px-6 py-2 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800">Cancel</button>
+<button class="px-6 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-primary/90">Save Changes</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body></html>

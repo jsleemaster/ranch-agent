@@ -1,204 +1,179 @@
 import React, { useMemo } from "react";
 
-import type { WebviewAssetCatalog } from "@shared/assets";
-import type { AgentSnapshot, SkillMetricSnapshot } from "@shared/domain";
+import type {
+  AgentSnapshot,
+  FeedEvent,
+  RuntimeSignalMetricSnapshot,
+  SkillMetricSnapshot,
+  StatuslineBudgetSnapshot
+} from "@shared/domain";
 import {
-  agentAvatarEmoji,
-  iconUrl,
-  skillEmoji,
-  skillIconKey,
-  teamIconKey,
-  teamEmoji
-} from "../world/iconKeys";
-import IconToken from "./IconToken";
+  latestAgentNarrative,
+  workspaceAvatarTone,
+  workspaceInitials,
+  workspaceRoleLabel,
+  workspaceSkillLabel,
+  workspaceSignalSummary,
+  workspaceStageProgress,
+  workspaceStateLabel,
+  WORKSPACE_STAGES,
+  type WorkspaceStageId
+} from "../world/workspaceStages";
 
 interface SkillFlowPanelProps {
   agents: AgentSnapshot[];
   skillMetrics: SkillMetricSnapshot[];
-  assets: WebviewAssetCatalog;
+  signalMetrics: RuntimeSignalMetricSnapshot[];
+  budgets: StatuslineBudgetSnapshot[];
+  feed: FeedEvent[];
+  stableStages: Record<string, WorkspaceStageId>;
 }
 
-const MAX_VISIBLE = 12;
-
-function gateStatusClass(gate: AgentSnapshot["currentHookGate"]): string {
-  switch (gate) {
-    case "open": return "gate-open";
-    case "blocked": return "gate-blocked";
-    case "failed": return "gate-failed";
-    case "closed": return "gate-closed";
-    default: return "gate-idle";
+function formatCompact(value: number | undefined): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
   }
-}
-
-export function gateStatusLabel(
-  gate: AgentSnapshot["currentHookGate"],
-  agentState?: AgentSnapshot["state"]
-): string {
-  switch (gate) {
-    case "open": return "진행";
-    case "blocked": return "승인대기";
-    case "failed": return "실패";
-    case "closed": return agentState === "completed" ? "종료" : "대기";
-    default: return "대기";
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}K`;
   }
+  return Math.round(value).toString();
 }
 
-export function growthLabel(stage: AgentSnapshot["growthStage"]): string {
-  switch (stage) {
-    case "seed": return "씨앗";
-    case "sprout": return "새싹";
-    case "grow": return "성장";
-    case "harvest": return "수확";
-    default: return "씨앗";
+function formatUsd(value: number | undefined): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
   }
-}
-
-export function skillLabel(skill: string | null): string {
-  if (!skill) return "—";
-  const labels: Record<string, string> = {
-    read: "읽기",
-    edit: "수정",
-    write: "작성",
-    bash: "실행",
-    search: "검색",
-    task: "작업",
-    ask: "질문",
-    other: "기타"
-  };
-  return labels[skill] ?? skill;
-}
-
-function runtimeRoleLabel(role: AgentSnapshot["runtimeRole"]): string {
-  switch (role) {
-    case "subagent":
-      return "서브";
-    case "team":
-      return "팀";
-    default:
-      return "메인";
+  if (value >= 100) {
+    return `$${value.toFixed(0)}`;
   }
-}
-
-function shortId(id: string): string {
-  if (id.length <= 12) return id;
-  const dash = id.indexOf("-");
-  if (dash > 0 && dash <= 10) return id.slice(0, dash);
-  return id.slice(0, 10) + "…";
-}
-
-function xpPercent(growthLevelUsage: number): number {
-  if (growthLevelUsage <= 0) {
-    return 0;
+  if (value >= 1) {
+    return `$${value.toFixed(2)}`;
   }
-  return Math.min(100, Math.round((growthLevelUsage / 34) * 100));
+  return `$${value.toFixed(3)}`;
 }
 
 export default function SkillFlowPanel({
   agents,
   skillMetrics: _skillMetrics,
-  assets
+  signalMetrics,
+  budgets,
+  feed,
+  stableStages
 }: SkillFlowPanelProps): JSX.Element {
-  const rows = useMemo(() => {
-    return agents
-      .filter(a => a.state === "active" || a.usageCount > 0)
-      .sort((a, b) => b.lastEventTs - a.lastEventTs)
-      .slice(0, MAX_VISIBLE);
+  const signalSummary = useMemo(() => workspaceSignalSummary(signalMetrics), [signalMetrics]);
+  const budgetByLineage = useMemo(() => new Map(budgets.map((budget) => [budget.lineageId, budget])), [budgets]);
+  const activeAgents = useMemo(() => {
+    const roleRank = (value: AgentSnapshot["runtimeRole"]): number => {
+      switch (value) {
+        case "main":
+          return 0;
+        case "team":
+          return 1;
+        default:
+          return 2;
+      }
+    };
+
+    return [...agents]
+      .filter((agent) => agent.state !== "completed" || agent.totalTokensTotal || agent.usageCount)
+      .sort((a, b) => {
+        return (
+          roleRank(a.runtimeRole) - roleRank(b.runtimeRole) ||
+          a.displayShortName.localeCompare(b.displayShortName, "ko") ||
+          a.rawShortId.localeCompare(b.rawShortId, "en")
+        );
+      });
   }, [agents]);
 
+  const columns = useMemo(() => {
+    return WORKSPACE_STAGES.map((stage) => ({
+      ...stage,
+      items: activeAgents.filter((agent) => (stableStages[agent.agentId] ?? "kickoff") === stage.id)
+    }));
+  }, [activeAgents, stableStages]);
+
   return (
-    <div className="panel-body pipeline-board">
-      {rows.length === 0 && (
-        <div className="pipeline-empty">
-          <div className="pipeline-empty-icon">⚡</div>
-          <div className="pipeline-empty-text">일꾼 출동 대기 중</div>
-          <div className="pipeline-empty-sub">일감이 들어오면 실시간으로 표시됩니다</div>
+    <div className="workspace-board">
+      <div className="workspace-panel-header workbench-header">
+        <div>
+          <h3 className="workspace-panel-title">작업 단계</h3>
+          <p className="workspace-panel-subtitle">작업이 지금 어디까지 왔는지 단계별로 보여줍니다.</p>
         </div>
-      )}
+        <div className="workbench-signal-row">
+          {signalSummary.map((chip) => (
+            <span key={chip.key} className={`workspace-chip ${chip.tone}`}>
+              {chip.label} {chip.value}건
+            </span>
+          ))}
+        </div>
+      </div>
 
-      {rows.map((agent) => {
-        const skill = agent.currentSkill;
-        const gate = agent.currentHookGate;
-        const agentSkillCount = skill ? (agent.skillUsageByKind[skill] ?? 0) : 0;
-        const teamIcon = iconUrl(assets, teamIconKey(agent));
-        const skillIcon = iconUrl(assets, skillIconKey(skill));
-        const xp = xpPercent(agent.growthLevelUsage);
-
-        return (
-          <div
-            key={agent.agentId}
-            className={`pipeline-row ${agent.state} growth-${agent.growthStage}`}
-          >
-            {/* Agent Avatar */}
-            <div className="pipeline-avatar">
-              <IconToken
-                src={teamIcon}
-                fallback={agentAvatarEmoji(agent) || teamEmoji(agent)}
-                title={agent.agentId}
-                className="pipeline-avatar-icon"
-                autoTrim={true}
-                maxAutoScale={7}
-                minAutoScale={3}
-              />
-              {agent.state === "active" && <div className="pipeline-pulse" />}
-            </div>
-
-            {/* Agent Info */}
-            <div className="pipeline-info">
-              <div className="pipeline-name">
-                {shortId(agent.agentId)}
-                <span className={`pipeline-role role-${agent.runtimeRole}`}>{runtimeRoleLabel(agent.runtimeRole)}</span>
-                {agent.state === "completed" && <span className="pipeline-status completed">마침</span>}
+      <div className="workbench-scroll">
+        <div className="workbench-columns">
+          {columns.map((column) => (
+            <section key={column.id} className="workbench-column">
+              <div className="workbench-column-head">
+                <div>
+                  <div className="workbench-column-title-row">
+                    <span className={`workbench-column-dot ${column.accentClass}`} />
+                    <h4 className="workbench-column-title">{column.label}</h4>
+                    <span className="workbench-column-count">{column.items.length}</span>
+                  </div>
+                  <p className="workbench-column-subtitle">{column.subtitle}</p>
+                </div>
               </div>
-              <div className="pipeline-xp-bar">
-                <div
-                  className={`pipeline-xp-fill growth-${agent.growthStage}`}
-                  style={{ width: `${xp}%` }}
-                />
-                <span
-                  className="pipeline-xp-label"
-                  title={`경험치 진행도: ${agent.growthLevelUsage}/35 · 단계 ${growthLabel(agent.growthStage)}`}
-                >
-                  XP {agent.growthLevelUsage}/35
-                </span>
+
+              <div className="workbench-column-body">
+                {column.items.length === 0 ? (
+                  <div className="workbench-empty-card">지금은 이 단계에 있는 작업이 없습니다.</div>
+                ) : (
+                  column.items.map((agent) => {
+                    const budget = agent.runtimeRole === "main" ? budgetByLineage.get(agent.agentId) : undefined;
+                    const progress = workspaceStageProgress(agent);
+                    const narrative = latestAgentNarrative(agent, feed);
+                    const tokenLabel = formatCompact(agent.totalTokensTotal);
+                    const sessionLabel = formatCompact(budget?.sessionTokensTotal);
+                    const costLabel = formatUsd(budget?.costUsd);
+
+                    return (
+                      <article key={agent.agentId} className="workbench-card">
+                        <div className="workbench-card-head">
+                          <div className={`workbench-avatar ${workspaceAvatarTone(agent)}`}>
+                            {workspaceInitials(agent.displayName)}
+                          </div>
+                          <div className="workbench-card-titleblock">
+                            <div className="workbench-card-titleline">
+                              <span className="workbench-card-title">{agent.displayShortName}</span>
+                              <span className={`workbench-card-role role-${agent.runtimeRole}`}>{workspaceRoleLabel(agent.runtimeRole)}</span>
+                            </div>
+                            <p className="workbench-card-subtitle">{workspaceStateLabel(agent)}</p>
+                          </div>
+                        </div>
+
+                        <p className="workbench-card-copy">{narrative}</p>
+
+                        <div className="workbench-progress-meta">
+                          <span>{agent.currentSkill ? `${workspaceSkillLabel(agent.currentSkill)} 진행` : "다음 작업 준비"}</span>
+                          <span>{progress}%</span>
+                        </div>
+                        <div className="workbench-progress-track">
+                          <div className="workbench-progress-fill" style={{ width: `${progress}%` }} />
+                        </div>
+
+                        <div className="workbench-card-footer">
+                          {tokenLabel ? <span className="workspace-chip tone-primary">총 사용량 {tokenLabel}</span> : null}
+                          {sessionLabel ? <span className="workspace-chip tone-info">현재 대화 {sessionLabel}</span> : null}
+                          {costLabel ? <span className="workspace-chip tone-muted">사용 비용 {costLabel}</span> : null}
+                        </div>
+                      </article>
+                    );
+                  })
+                )}
               </div>
-            </div>
-
-            {/* Skill Stage */}
-            <div
-              className={`pipeline-stage stage-skill ${skill ? "" : "inactive"}`}
-            >
-              <IconToken
-                src={skillIcon}
-                fallback={skillEmoji(skill)}
-                title={`스킬: ${skillLabel(skill)}`}
-                className="pipeline-stage-icon"
-              />
-              <span className="pipeline-stage-label">{skillLabel(skill)}</span>
-              {agentSkillCount > 0 && (
-                <span className="pipeline-stage-count">{agentSkillCount}</span>
-              )}
-            </div>
-
-            {/* Gate Status */}
-            <div className={`pipeline-gate ${gateStatusClass(gate)}`}>
-              <div className="pipeline-gate-orb" />
-              <span className="pipeline-gate-label">{gateStatusLabel(gate, agent.state)}</span>
-            </div>
-
-            {/* Stats */}
-            <div className="pipeline-stats">
-              <span className="pipeline-stat" title="AGENT.md 호출 횟수">
-                <span className="pipeline-stat-icon">📄</span>
-                <span className="pipeline-stat-val">{agent.agentMdCallsTotal}</span>
-              </span>
-              <span className="pipeline-stat" title="작업 이벤트 누적 횟수">
-                <span className="pipeline-stat-icon">🔁</span>
-                <span className="pipeline-stat-val">{agent.usageCount}</span>
-              </span>
-            </div>
-          </div>
-        );
-      })}
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

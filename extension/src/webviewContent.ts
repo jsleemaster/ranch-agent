@@ -29,6 +29,17 @@ function findBuiltAssets(webviewDistDir: string): { scriptPath: string | null; c
   };
 }
 
+function withVersionedQuery(filePath: string, uri: vscode.Uri): string {
+  try {
+    const stat = fs.statSync(filePath);
+    const version = Math.trunc(stat.mtimeMs).toString();
+    const separator = uri.toString().includes("?") ? "&" : "?";
+    return `${uri.toString()}${separator}v=${version}`;
+  } catch {
+    return uri.toString();
+  }
+}
+
 export function buildWebviewHtml(options: {
   webview: vscode.Webview;
   webviewDistDir: string;
@@ -51,13 +62,15 @@ export function buildWebviewHtml(options: {
   </head>
   <body>
     <h3>Webview bundle not found</h3>
-    <p>Build <code>webview-ui</code> first so Ranch-Agent can render.</p>
+    <p>Build <code>webview-ui</code> first so the control room can render.</p>
   </body>
 </html>`;
   }
 
-  const scriptUri = webview.asWebviewUri(vscode.Uri.file(scriptPath));
-  const cssUris = cssPaths.map((cssPath) => webview.asWebviewUri(vscode.Uri.file(cssPath)).toString());
+  const scriptUri = withVersionedQuery(scriptPath, webview.asWebviewUri(vscode.Uri.file(scriptPath)));
+  const cssUris = cssPaths.map((cssPath) =>
+    withVersionedQuery(cssPath, webview.asWebviewUri(vscode.Uri.file(cssPath)))
+  );
 
   const csp = [
     "default-src 'none'",
@@ -76,7 +89,7 @@ export function buildWebviewHtml(options: {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="${csp}" />
     ${cssLinks}
-    <title>Ranch-Agent</title>
+    <title>Ranch-Agent Control Room</title>
   </head>
   <body>
     <div id="root"></div>

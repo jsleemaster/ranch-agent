@@ -1,5 +1,6 @@
 import type { AgentSnapshot, GrowthStage, HookGateState, SkillKind } from "@shared/domain";
 import type { WebviewAssetCatalog } from "@shared/assets";
+import { defaultRailFrontSprite, defaultRailSideSprite } from "./railSpriteDataUrl";
 
 const SKILL_EMOJI: Record<SkillKind, string> = {
   read: "📖",
@@ -20,42 +21,42 @@ const GATE_EMOJI: Record<HookGateState, string> = {
 };
 
 const ZONE_EMOJI: Record<string, string> = {
-  src: "🌾",
-  apps: "🐄",
-  packages: "🐓",
-  infra: "🏚️",
-  scripts: "🏇",
-  docs: "📋",
-  tests: "🧪",
-  etc: "🪵"
+  src: "🔎",
+  apps: "🚆",
+  packages: "🔀",
+  infra: "🛠️",
+  scripts: "🧪",
+  docs: "📝",
+  tests: "✅",
+  etc: "🚉"
 };
 
 const ZONE_LABELS: Record<string, string> = {
-  src: "목초지",
-  apps: "우사",
-  packages: "양계장",
-  infra: "사료공방",
-  scripts: "훈련목장",
-  docs: "관리동",
-  tests: "진료소",
-  etc: "야적장"
+  src: "탐색역",
+  apps: "본선 승강장",
+  packages: "환승 구간",
+  infra: "정비고",
+  scripts: "시험선",
+  docs: "보고실",
+  tests: "검수선",
+  etc: "대합실"
 };
 
 const TEAM_EMOJI_BY_ICON: Record<string, string> = {
-  team_default: "🐮",
-  team_solo: "🐴"
+  team_default: "🚆",
+  team_solo: "🚈"
 };
 
 const TEAM_EMOJI_VARIANTS: Record<string, readonly string[]> = {
-  team_default: ["🐮", "🐄", "🐂", "🐃"],
-  team_solo: ["🐴", "🐎", "🦄", "🫏"]
+  team_default: ["🚆", "🚇", "🚄", "🚉"],
+  team_solo: ["🚈", "🚊", "🚄", "🚇"]
 };
 
 const GROWTH_EMOJI_BY_STAGE: Record<GrowthStage, string> = {
-  seed: "🌱",
-  sprout: "🌿",
-  grow: "🌾",
-  harvest: "🧺"
+  seed: "일",
+  sprout: "준",
+  grow: "급",
+  harvest: "특"
 };
 
 function hashText(value: string): number {
@@ -89,6 +90,10 @@ export function iconUrl(catalog: WebviewAssetCatalog, key: string): string | und
   return catalog.icons[key];
 }
 
+export function railFrontIconUrl(_catalog: WebviewAssetCatalog, agent: AgentSnapshot): string | undefined {
+  return defaultRailFrontSprite(agent.runtimeRole);
+}
+
 export function spriteUrl(catalog: WebviewAssetCatalog, state: AgentSnapshot["state"]): string | undefined {
   if (catalog.source === "placeholder-pack" || catalog.source === "primitive") {
     return undefined;
@@ -96,11 +101,19 @@ export function spriteUrl(catalog: WebviewAssetCatalog, state: AgentSnapshot["st
   return catalog.sprites[state === "active" ? "agent_active" : "agent_idle"];
 }
 
+export function railSideSpriteUrl(_catalog: WebviewAssetCatalog, agent: AgentSnapshot): string | undefined {
+  return defaultRailSideSprite(agent.runtimeRole);
+}
+
 export function tileUrl(catalog: WebviewAssetCatalog, zoneId: string): string | undefined {
   if (catalog.source === "placeholder-pack" || catalog.source === "primitive") {
     return undefined;
   }
   return catalog.tiles[`zone_${zoneId}`];
+}
+
+export function railStageBackgroundUrl(catalog: WebviewAssetCatalog): string | undefined {
+  return catalog.tiles.rail_stage_bg;
 }
 
 export function teamEmoji(agent: AgentSnapshot): string {

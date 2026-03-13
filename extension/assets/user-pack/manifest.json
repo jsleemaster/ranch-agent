@@ -3,6 +3,10 @@
   "icons": {
     "team_default": "icons/team_default.png",
     "team_solo": "icons/team_solo.png",
+    "rail_front_default": "icons/train_front.png",
+    "rail_front_main": "icons/train_front_main.png",
+    "rail_front_subagent": "icons/train_front_subagent.png",
+    "rail_front_team": "icons/train_front_team.png",
     "skill_read": "icons/skill_read.png",
     "skill_edit": "icons/skill_edit.png",
     "skill_write": "icons/skill_write.png",
@@ -26,7 +30,11 @@
   },
   "sprites": {
     "agent_idle": "sprites/agent_idle.png",
-    "agent_active": "sprites/agent_active.png"
+    "agent_active": "sprites/agent_active.png",
+    "rail_side_default": "sprites/train_side.png",
+    "rail_side_main": "sprites/train_side_main.png",
+    "rail_side_subagent": "sprites/train_side_subagent.png",
+    "rail_side_team": "sprites/train_side_team.png"
   },
   "tiles": {
     "zone_src": "tiles/zone_src.png",
@@ -36,6 +44,7 @@
     "zone_scripts": "tiles/zone_scripts.png",
     "zone_docs": "tiles/zone_docs.png",
     "zone_tests": "tiles/zone_tests.png",
-    "zone_etc": "tiles/zone_etc.png"
+    "zone_etc": "tiles/zone_etc.png",
+    "rail_stage_bg": "tiles/rail_stage_bg.png"
   }
 }

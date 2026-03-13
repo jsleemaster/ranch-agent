@@ -1,27 +1,74 @@
 # Ranch-Agent
 
-Emoji-first VS Code extension for visualizing multi-agent runtime activity as a live ranch dashboard.
+Premium rail control room for visualizing Claude multi-agent runtime activity inside VS Code.
+
+![Ranch-Agent Dashboard](./docs/images/ranch-agent-main.png)
+
+> Hero image path: `docs/images/ranch-agent-main.png`
 
 ## Overview
 
-Ranch-Agent watches Claude JSONL runtime logs and renders agent activity across four panels so you can quickly understand who is doing what, where, and when during coding sessions.
+Ranch-Agent watches Claude runtime events and renders them as a live rail-control dashboard.
+The current UI theme is inspired by premium autonomous metropolitan rail operations: a control board, line control, trip archive, route minimap, and control log.
 
-It is built as a monorepo with:
+Core runtime sources:
 
-- `extension/` for the VS Code extension host logic
-- `webview-ui/` for the React-based panel UI
-- `shared/` for shared runtime and protocol types
+- Claude JSONL transcripts (primary source of truth)
+- Claude HTTP hooks (optional supplemental input)
+- Claude `statusLine` stdin snapshots (optional session/context/cost overlay)
+
+## What You See
+
+- `관제 보드`: active formations, role badges, throughput
+- `노선 관제`: per-lineage live stage, gate state, and budget strip
+- `운행 기록`: finished / rotated sessions with duration, throughput, and cost
+- `노선 미니맵`: simplified 5-stop route (`대기`, `탐색`, `정비`, `실행`, `보고`)
+- `관제 로그`: recent runtime events and session rollover history
+
+## Runtime Model
+
+- `agentRuntimeId` = stable lineage ID used for on-screen identity
+- `sessionRuntimeId` = actual Claude session / rollover identity
+- JSONL remains the source of truth for tool activity and per-agent history
+- statusLine is only used to enrich the current main-line session with:
+  - context usage
+  - trip throughput
+  - operating cost
 
 ## Features
 
-- 4-panel live dashboard for workers, flow, zones, and activity
-- Automatic JSONL discovery plus manual runtime file path override
-- Multi-session observation support
-- Workspace `.claude/agents/*.md` detection and invocation tracking
-- Event-derived skill normalization, gate status, and zone mapping
-- Main-branch risk highlighting (`main`/`master`/`trunk`)
-- Asset-pack override strategy (`user-pack` -> `placeholder-pack` -> emoji)
-- Optional local unmapped-skill NDJSON debug logging
+- Near real-time Claude JSONL observation
+- Multi-session lineage handling
+- Session archive with rollover detection
+- Runtime signal aggregation (`운행 조정`, `외부 설비`, `신호 누락`, `운행 안내`)
+- `.claude/agents/*.md` and skill usage tracking
+- Optional HTTP hooks receiver
+- Optional Claude statusLine bridge with `claude-hud` fan-out wrapper
+- Local debug NDJSON logging under VS Code global storage
+- Rail asset slots with auto-discovery for `train_front` / `train_side` image files
+
+## Custom Rail Assets
+
+Ranch-Agent can swap in custom train art without additional code changes.
+
+Two zero-config filenames are supported out of the box:
+
+- `assets/user-pack/icons/train_front.png`
+- `assets/user-pack/sprites/train_side.png`
+- `assets/user-pack/tiles/rail_stage_bg.png`
+
+If those files exist, Ranch-Agent uses them automatically:
+
+- `train_front` for board cards and summary avatars
+- `train_side` for the live stage train movement
+- `rail_stage_bg` for the stage background plate
+
+Role-specific overrides are also supported:
+
+- `train_front_main`, `train_front_subagent`, `train_front_team`
+- `train_side_main`, `train_side_subagent`, `train_side_team`
+
+If you want explicit mapping instead, update [assets/user-pack/manifest.json](./assets/user-pack/manifest.json).
 
 ## Installation
 
@@ -47,41 +94,92 @@ cd extension
 npx @vscode/vsce package
 ```
 
-Then open VS Code:
-
-1. Extensions panel
-2. `...` menu
-3. `Install from VSIX...`
-4. Select the generated `.vsix` file
+Then install the generated `.vsix` from VS Code.
 
 ## Quick Start
 
-1. Open this repository in VS Code.
-2. Go to Run and Debug and launch `Run Ranch-Agent`.
-3. In the Extension Development Host, run `Ranch-Agent: Focus Ranch` from Command Palette.
-4. Confirm the `RANCH-AGENT` panel appears at the bottom.
+### Extension Development Host
 
-For a local "always synced" development loop in your main VS Code install:
+1. Open this repository in VS Code.
+2. Run `Run Ranch-Agent` from Run and Debug.
+3. In the Extension Development Host, open `Ranch-Agent: Focus Control Room`.
+4. Confirm the bottom panel shows the control room.
+
+### Main VS Code local loop
 
 ```bash
 npm run dev:main-vscode
 ```
 
+### Typical Claude workflow
+
+1. Open your target workspace in VS Code.
+2. Start Claude Code in that workspace terminal.
+3. Run tasks or agent teams.
+4. Open `Ranch-Agent: Focus Control Room`.
+5. Watch live activity stream into the control room.
+
+If auto-discovery misses the intended file, set `expeditionSituationRoom.runtimeJsonlPath` manually.
+
 ## Configuration
 
-All settings use the `expeditionSituationRoom.*` namespace for compatibility.
+All settings stay under `expeditionSituationRoom.*` for compatibility.
 
-### Runtime input
-
-Auto mode (default): watches `~/.claude/projects/<workspace>/` for `.jsonl` files.
-
-Manual mode:
+### JSONL runtime input
 
 ```json
 {
   "expeditionSituationRoom.runtimeJsonlPath": "/absolute/path/to/session.jsonl"
 }
 ```
+
+### HTTP hooks input (optional)
+
+```json
+{
+  "expeditionSituationRoom.httpHook.enabled": true,
+  "expeditionSituationRoom.httpHook.bind": "127.0.0.1",
+  "expeditionSituationRoom.httpHook.port": 48216,
+  "expeditionSituationRoom.httpHook.path": "/ranch-hook",
+  "expeditionSituationRoom.httpHook.authToken": "",
+  "expeditionSituationRoom.httpHook.mergeMode": "jsonl_primary"
+}
+```
+
+Detailed guide: [docs/HTTP_HOOKS.md](./docs/HTTP_HOOKS.md)
+
+### Claude statusLine bridge (optional)
+
+Enable the local receiver:
+
+```json
+{
+  "expeditionSituationRoom.statusline.enabled": true,
+  "expeditionSituationRoom.statusline.bind": "127.0.0.1",
+  "expeditionSituationRoom.statusline.port": 48217,
+  "expeditionSituationRoom.statusline.path": "/ranch-statusline",
+  "expeditionSituationRoom.statusline.authToken": "",
+  "expeditionSituationRoom.statusline.rawLog.enabled": false,
+  "expeditionSituationRoom.statusline.rawLog.filePath": ".local-debug/statusline-events.ndjson",
+  "expeditionSituationRoom.statusline.rawLog.relativeBase": "global"
+}
+```
+
+Recommended flow:
+
+1. Enable `expeditionSituationRoom.statusline.enabled`
+2. Run `Ranch-Agent: Copy Claude StatusLine Setup`
+3. Paste the copied `statusLine` block into `.claude/settings.json` or `.claude/settings.local.json`
+4. Restart Claude
+
+Notes:
+
+- The current bridge reads only what Claude actually sends via `statusLine.command` stdin
+- Current UI uses `노선 점유율`, `회차 처리량`, and `운영비`
+- A fan-out wrapper lets Ranch-Agent and `claude-hud` run together
+- Missing fields are hidden instead of guessed
+
+Detailed guide: [docs/STATUSLINE_BRIDGE.md](./docs/STATUSLINE_BRIDGE.md)
 
 ### Main branch detection
 
@@ -93,55 +191,46 @@ Manual mode:
 }
 ```
 
-### Unmapped skill debug logging
+### Debug logging
 
 ```json
 {
   "expeditionSituationRoom.debug.unmappedSkillLog.enabled": true,
   "expeditionSituationRoom.debug.unmappedSkillLog.filePath": ".local-debug/unmapped-skill-events.ndjson",
-  "expeditionSituationRoom.debug.unmappedSkillLog.relativeBase": "global"
+  "expeditionSituationRoom.debug.unmappedSkillLog.relativeBase": "global",
+  "expeditionSituationRoom.debug.unmappedSkillLog.maxDetailChars": 1200,
+  "expeditionSituationRoom.debug.unmappedSkillLog.captureReasons": [
+    "unknown_tool_name",
+    "missing_tool_name",
+    "assistant_without_tool_name"
+  ]
 }
 ```
 
-- `relativeBase: "global"` (default): write relative log paths under extension global storage (recommended; avoids project folder noise).
-  - macOS example: `~/Library/Application Support/Code/User/globalStorage/local.ranch-agent-extension/.local-debug/unmapped-skill-events.ndjson`
-- `relativeBase: "workspace"`: write relative log paths under the opened workspace root.
-- Absolute `filePath` (or `~/...`) always writes exactly to that location.
-- Log file is created only when `expeditionSituationRoom.debug.unmappedSkillLog.enabled` is `true`.
+Default signal lane labels in the UI:
 
-## Development
+- `orchestration_signal` → `운행 조정`
+- `unknown_tool_signal` → `외부 설비`
+- `tool_name_missing_signal` → `신호 누락`
+- `assistant_reply_signal` → `운행 안내`
+
+## Development Checks
+
+Before opening a PR, run:
 
 ```bash
-# Full build
 npm run build
-
-# Extension checks
 npm --prefix extension run test
 npm --prefix extension run typecheck
-
-# Webview checks
 npm --prefix webview-ui run typecheck
 ```
 
-Detailed internal and operational guide:
-[AGENT.md](./AGENT.md)
+## Credits
 
-## Support
+This project was originally sparked by the idea of making agent runtime activity feel spatial and alive inside VS Code.
 
-Use [GitHub Issues](https://github.com/jsleemaster/ranch-agent/issues) for bug reports, usage questions, and feature requests.
-
-## Contributing
-
-Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
-
-## Security
-
-For vulnerability reporting policy and private disclosure process, see [SECURITY.md](./SECURITY.md).
-
-## Code of Conduct
-
-This project follows [Contributor Covenant v2.1](./CODE_OF_CONDUCT.md).
+Shout-out to [pixel-agents](https://github.com/pablodelucca/pixel-agents) for helping validate the core direction around runtime watching and visual storytelling.
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE).
+MIT

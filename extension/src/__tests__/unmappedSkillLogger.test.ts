@@ -6,13 +6,14 @@ import { describe, expect, it } from "vitest";
 import type { RawRuntimeEvent } from "../../../shared/runtime";
 import { buildUnmappedSkillRecord, resolveUnmappedSkillLogPath } from "../debug/unmappedSkillLogger";
 
-function event(type: RawRuntimeEvent["type"], toolName?: string): RawRuntimeEvent {
+function event(type: RawRuntimeEvent["type"], toolName?: string, detail?: string): RawRuntimeEvent {
   return {
     runtime: "claude-jsonl",
     agentRuntimeId: "agent-1",
     ts: 1_000,
     type,
-    toolName
+    toolName,
+    detail
   };
 }
 
@@ -34,6 +35,24 @@ describe("buildUnmappedSkillRecord", () => {
     expect(record).not.toBeNull();
     expect(record?.reason).toBe("assistant_without_tool_name");
     expect(record?.mappedSkill).toBeNull();
+  });
+
+  it("truncates long detail using maxDetailChars", () => {
+    const detail = "x".repeat(2000);
+    const record = buildUnmappedSkillRecord(event("tool_done", undefined, detail), {
+      maxDetailChars: 1200
+    });
+    expect(record).not.toBeNull();
+    expect(record?.detail?.length).toBe(1200);
+    expect(record?.detailOriginalLength).toBe(2000);
+    expect(record?.detailTruncated).toBe(true);
+  });
+
+  it("filters records by captureReasons", () => {
+    const record = buildUnmappedSkillRecord(event("assistant_text"), {
+      captureReasons: ["unknown_tool_name"]
+    });
+    expect(record).toBeNull();
   });
 });
 
