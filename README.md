@@ -145,3 +145,8 @@ This project follows [Contributor Covenant v2.1](./CODE_OF_CONDUCT.md).
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).
+
+## Agent Setup
+
+- Codex reads `AGENTS.md`; Claude Code reads `CLAUDE.md`, which imports `AGENTS.md`.
+- Change project rules only in `AGENTS.md`; `CLAUDE.md` holds Claude-specific differences.
